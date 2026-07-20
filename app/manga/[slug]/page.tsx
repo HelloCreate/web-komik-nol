@@ -2,9 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 
-// Fungsi untuk mengambil data komik beserta chapternya
 async function getMangaDetails(slug: string) {
-  // Mengambil info komik termasuk kolom baru (genre, author, artist)
   const { data: manga } = await supabase
     .from('manga')
     .select('id, title, synopsis, cover_url, type, status, genre, author, artist')
@@ -13,7 +11,6 @@ async function getMangaDetails(slug: string) {
 
   if (!manga) return null;
 
-  // Mengambil daftar chapter milik komik ini
   const { data: chapters } = await supabase
     .from('chapters')
     .select('id, chapter_number, title, created_at')
@@ -23,8 +20,10 @@ async function getMangaDetails(slug: string) {
   return { manga, chapters: chapters || [] };
 }
 
-export default async function MangaDetailPage({ params }: { params: { slug: string } }) {
-  const data = await getMangaDetails(params.slug);
+// Menggunakan Promise pada params untuk Next.js terbaru
+export default async function MangaDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const resolvedParams = await params;
+  const data = await getMangaDetails(resolvedParams.slug);
 
   if (!data) {
     notFound();
@@ -38,14 +37,12 @@ export default async function MangaDetailPage({ params }: { params: { slug: stri
         
         {/* Bagian Atas: Sampul dan Informasi Detail */}
         <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-          {/* Gambar Sampul */}
           <img 
             src={manga.cover_url || '/placeholder.jpg'} 
             alt={manga.title} 
             className="w-48 h-68 object-cover rounded-lg shadow-md border border-gray-700"
           />
 
-          {/* Metadata Komik */}
           <div className="flex-1 space-y-3 w-full">
             <h1 className="text-2xl md:text-3xl font-bold text-orange-500 text-center md:text-left">
               {manga.title}
@@ -61,7 +58,6 @@ export default async function MangaDetailPage({ params }: { params: { slug: stri
                 <span className="text-green-400 font-medium">{manga.status}</span>
               </div>
 
-              {/* FITUR BARU: Menampilkan Author & Artist */}
               <div className="mt-1 border-t border-gray-800/40 pt-1 col-span-1">
                 <span className="text-gray-400 block text-xs uppercase font-semibold">Author</span>
                 <span className="text-gray-200">{manga.author || '-'}</span>
@@ -71,7 +67,6 @@ export default async function MangaDetailPage({ params }: { params: { slug: stri
                 <span className="text-gray-200">{manga.artist || '-'}</span>
               </div>
 
-              {/* FITUR BARU: Menampilkan Genre */}
               <div className="col-span-2 mt-1 border-t border-gray-800/40 pt-2">
                 <span className="text-gray-400 block text-xs uppercase font-semibold mb-1">Genre</span>
                 <div className="flex flex-wrap gap-1.5">
@@ -108,7 +103,7 @@ export default async function MangaDetailPage({ params }: { params: { slug: stri
               chapters.map((ch) => (
                 <Link 
                   key={ch.id} 
-                  href={`/manga/${params.slug}/chapter/${ch.chapter_number}`}
+                  href={`/manga/${resolvedParams.slug}/chapter/${ch.chapter_number}`}
                   className="flex justify-between items-center bg-gray-950 hover:bg-orange-600/10 border border-gray-800 hover:border-orange-500/40 p-3 rounded-lg transition"
                 >
                   <span className="font-medium text-gray-200 hover:text-orange-400 transition-colors">
