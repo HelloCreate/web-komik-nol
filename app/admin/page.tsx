@@ -155,11 +155,26 @@ export default function AdminPage() {
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
       <div className="max-w-6xl mx-auto space-y-12">
         <div className="flex justify-between items-center border-b border-gray-800 pb-4">
-          <h1 className="text-3xl font-bold text-orange-500">Panel Utama Admin Yanama Comic</h1>
-          <Link href="/upload" className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded text-sm font-semibold transition">
-            → Ke Halaman Upload Gambar
-          </Link>
-        </div>
+  <div className="space-y-1">
+    <h1 className="text-3xl font-bold text-orange-500">Panel Admin & Manajemen</h1>
+    <p className="text-xs text-green-400 font-medium">🛡️ Sesi Admin Aktif & Terlindungi</p>
+  </div>
+  <div className="flex gap-3 items-center">
+    <Link href="/upload" className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded text-sm font-semibold transition">
+      → Ke Halaman Upload
+    </Link>
+    <button 
+      onClick={() => {
+        // Menghapus cookie tanda login admin agar sistem mengunci kembali
+        document.cookie = "admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict";
+        window.location.href = '/login';
+      }}
+      className="bg-gray-800 hover:bg-red-700 border border-gray-700 hover:border-red-600 text-gray-300 hover:text-white px-3 py-2 rounded text-sm font-semibold transition"
+    >
+      Keluar (Logout)
+    </button>
+  </div>
+</div>
 
         <div className="grid md:grid-cols-2 gap-8">
           {/* FORM DINAMIS (BISA UNTUK TAMBAH & EDIT MANGAS) */}
