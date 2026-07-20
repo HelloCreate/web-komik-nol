@@ -13,7 +13,7 @@ export default function LoginPage() {
     e.preventDefault();
 
     // Akun admin khusus web komik kamu
-    if (username === 'adminyanama' && password === 'komikrahasia123') {
+    if (username === 'Yanama' && password === 'Sorashiro#135') {
       document.cookie = "admin_session=authenticated; path=/; max-age=86400; SameSite=Strict";
       router.push('/admin');
       router.refresh();
