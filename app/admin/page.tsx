@@ -13,11 +13,13 @@ export default function AdminPage() {
   const [formMode, setFormMode] = useState<'TAMBAH' | 'EDIT'>('TAMBAH');
   const [selectedMangaIdForEdit, setSelectedMangaIdForEdit] = useState<number | null>(null);
 
-  // State Form Komik (Dipakai bersama untuk Tambah & Edit)
+  // State Form Komik
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [synopsis, setSynopsis] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null); // File gambar cover fisik
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [type, setType] = useState('Manga');
   const [status, setStatus] = useState('Ongoing');
   const [genre, setGenre] = useState('');
@@ -36,7 +38,7 @@ export default function AdminPage() {
   const [targetChapterId, setTargetChapterId] = useState('');
   const [deletePageMsg, setDeletePageMsg] = useState('');
 
-  // Fungsi Fetch Data dari Supabase
+  // Fetch Data
   const refreshData = async () => {
     const { data: mangas } = await supabase.from('manga').select('*').order('title', { ascending: true });
     if (mangas) setMangaList(mangas);
@@ -49,7 +51,6 @@ export default function AdminPage() {
     refreshData();
   }, []);
 
-  // Memicu pengisian form otomatis saat tombol "Edit" di daftar komik diklik
   const startEditingManga = (manga: any) => {
     setFormMode('EDIT');
     setSelectedMangaIdForEdit(manga.id);
@@ -57,56 +58,89 @@ export default function AdminPage() {
     setSlug(manga.slug || '');
     setSynopsis(manga.synopsis || '');
     setCoverUrl(manga.cover_url || '');
+    setCoverFile(null);
     setType(manga.type || 'Manga');
     setStatus(manga.status || 'Ongoing');
     setGenre(manga.genre || '');
     setAuthor(manga.author || '');
     setArtist(manga.artist || '');
     setMangaStatusMsg(`✍️ Sedang mengedit komik: ${manga.title}`);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Otomatis scroll ke atas tempat form berada
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Fungsi untuk membatalkan mode edit dan kembali ke mode tambah
   const cancelEditingManga = () => {
     setFormMode('TAMBAH');
     setSelectedMangaIdForEdit(null);
-    setTitle(''); setSlug(''); setSynopsis(''); setCoverUrl('');
+    setTitle(''); setSlug(''); setSynopsis(''); setCoverUrl(''); setCoverFile(null);
     setGenre(''); setAuthor(''); setArtist(''); setType('Manga'); setStatus('Ongoing');
     setMangaStatusMsg('');
   };
 
-  // 1. FUNGSI SUBMIT (Bisa Tambah Baru ATAU Simpan Perubahan Edit)
+  // FUNGSI SUBMIT (Dengan Auto Upload Gambar Cover ke Supabase Storage)
   const handleMangaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !slug) return;
 
+    setUploadingCover(true);
+    let finalCoverUrl = coverUrl;
+
+    // Jika pengguna memilih file gambar baru dari HP/Laptop
+    if (coverFile) {
+      setMangaStatusMsg('⏳ Mengunggah gambar cover...');
+      const fileExt = coverFile.name.split('.').pop();
+      const fileName = `covers/cover_${Date.now()}.${fileExt}`;
+
+      const { error: storageError } = await supabase.storage
+        .from('komik-images')
+        .upload(fileName, coverFile, { cacheControl: '3600', upsert: true });
+
+      if (storageError) {
+        setMangaStatusMsg(`Gagal upload cover: ${storageError.message}`);
+        setUploadingCover(false);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('komik-images')
+        .getPublicUrl(fileName);
+
+      finalCoverUrl = publicUrlData.publicUrl;
+    }
+
     const mangaData = { 
-      title, slug, synopsis, cover_url: coverUrl, type, status, genre, author, artist 
+      title, 
+      slug, 
+      synopsis, 
+      cover_url: finalCoverUrl, 
+      type, 
+      status, 
+      genre, 
+      author, 
+      artist 
     };
 
     if (formMode === 'TAMBAH') {
-      // Eksekusi Tambah Data Baru
       const { error } = await supabase.from('manga').insert([mangaData]);
       if (error) setMangaStatusMsg(`Gagal Tambah: ${error.message}`);
       else {
-        setMangaStatusMsg('🎉 Judul komik baru berhasil ditambahkan!');
+        setMangaStatusMsg('🎉 Judul komik baru berhasil ditambahkan beserta cover!');
         cancelEditingManga();
         refreshData();
       }
     } else {
-      // Eksekusi Update/Edit Data Lama
       if (!selectedMangaIdForEdit) return;
       const { error } = await supabase.from('manga').update(mangaData).eq('id', selectedMangaIdForEdit);
       if (error) setMangaStatusMsg(`Gagal Update: ${error.message}`);
       else {
-        setMangaStatusMsg('💾 Perubahan data komik berhasil disimpan!');
+        setMangaStatusMsg('💾 Perubahan data komik & cover berhasil disimpan!');
         cancelEditingManga();
         refreshData();
       }
     }
+
+    setUploadingCover(false);
   };
 
-  // 2. Fungsi Tambah Chapter
   const handleCreateChapter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMangaId || !chapterNumber) return;
@@ -119,7 +153,6 @@ export default function AdminPage() {
     }
   };
 
-  // 3. Fungsi Hapus Total Komik
   const handleDeleteManga = async (id: number, mangaTitle: string) => {
     if (!confirm(`Apakah Anda yakin ingin MENGHAPUS TOTAL komik "${mangaTitle}" beserta seluruh chapternya?`)) return;
     const { error } = await supabase.from('manga').delete().eq('id', id);
@@ -130,7 +163,6 @@ export default function AdminPage() {
     }
   };
 
-  // 4. Fungsi Hapus Satu Chapter
   const handleDeleteChapter = async (id: number, num: number, mangaTitle: string) => {
     if (!confirm(`Hapus Chapter ${num} dari komik ${mangaTitle}?`)) return;
     const { error } = await supabase.from('chapters').delete().eq('id', id);
@@ -138,7 +170,6 @@ export default function AdminPage() {
     else refreshData();
   };
 
-  // 5. Fungsi Kosongkan Halaman Gambar
   const handleDeleteAllPagesInChapter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetChapterId) return;
@@ -154,30 +185,31 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
       <div className="max-w-6xl mx-auto space-y-12">
+        
+        {/* Header Navigasi */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-4">
-  <div className="space-y-1">
-    <h1 className="text-3xl font-bold text-orange-500">Panel Admin & Manajemen</h1>
-    <p className="text-xs text-green-400 font-medium">🛡️ Sesi Admin Aktif & Terlindungi</p>
-  </div>
-  <div className="flex gap-3 items-center">
-    <Link href="/upload" className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded text-sm font-semibold transition">
-      → Ke Halaman Upload
-    </Link>
-    <button 
-      onClick={() => {
-        // Menghapus cookie tanda login admin agar sistem mengunci kembali
-        document.cookie = "admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict";
-        window.location.href = '/login';
-      }}
-      className="bg-gray-800 hover:bg-red-700 border border-gray-700 hover:border-red-600 text-gray-300 hover:text-white px-3 py-2 rounded text-sm font-semibold transition"
-    >
-      Keluar (Logout)
-    </button>
-  </div>
-</div>
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-orange-500">Panel Admin & Manajemen</h1>
+            <p className="text-xs text-green-400 font-medium">🛡️ Sesi Admin Aktif & Terlindungi</p>
+          </div>
+          <div className="flex gap-3 items-center">
+            <Link href="/upload" className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded text-sm font-semibold transition">
+              → Ke Halaman Upload
+            </Link>
+            <button 
+              onClick={() => {
+                document.cookie = "admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict";
+                window.location.href = '/login';
+              }}
+              className="bg-gray-800 hover:bg-red-700 border border-gray-700 hover:border-red-600 text-gray-300 hover:text-white px-3 py-2 rounded text-sm font-semibold transition"
+            >
+              Keluar (Logout)
+            </button>
+          </div>
+        </div>
 
         <div className="grid md:grid-cols-2 gap-8">
-          {/* FORM DINAMIS (BISA UNTUK TAMBAH & EDIT MANGAS) */}
+          {/* FORM TAMBAH/EDIT KOMIK */}
           <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-orange-400">
@@ -191,10 +223,30 @@ export default function AdminPage() {
             </div>
             
             <form onSubmit={handleMangaSubmit} className="space-y-4">
-              <input type="text" placeholder="Judul Komik" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-              <input type="text" placeholder="Slug URL" value={slug} onChange={(e) => setSlug(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-              <input type="text" placeholder="Link URL Gambar Sampul/Cover" value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-              <input type="text" placeholder="Genre (Pisahkan dengan komik, contoh: Action, Drama)" value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
+              <input type="text" placeholder="Judul Komik" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required />
+              <input type="text" placeholder="Slug URL (Contoh: solo-leveling)" value={slug} onChange={(e) => setSlug(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required />
+              
+              {/* FIELD UPLOAD GAMBAR COVER FOTONYA LANGSUNG */}
+              <div>
+                <label className="block text-xs text-gray-400 font-semibold mb-1">
+                  Upload Gambar Sampul/Cover (Pilih dari HP / Laptop):
+                </label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setCoverFile(e.target.files[0]);
+                    }
+                  }}
+                  className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-600/20 file:text-orange-400 hover:file:bg-orange-600/30"
+                />
+                {coverUrl && !coverFile && (
+                  <p className="text-[11px] text-gray-500 mt-1 truncate">Cover terpasang: {coverUrl}</p>
+                )}
+              </div>
+
+              <input type="text" placeholder="Genre (Action, Drama, Fantasy)" value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
               
               <div className="grid grid-cols-2 gap-2">
                 <input type="text" placeholder="Author / Penulis" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
@@ -215,8 +267,12 @@ export default function AdminPage() {
                 </select>
               </div>
 
-              <button type="submit" className={`w-full font-bold py-2 rounded text-sm transition ${formMode === 'TAMBAH' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                {formMode === 'TAMBAH' ? 'Buat Judul Komik' : 'Simpan Perubahan'}
+              <button 
+                type="submit" 
+                disabled={uploadingCover}
+                className={`w-full font-bold py-2 rounded text-sm transition ${uploadingCover ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : formMode === 'TAMBAH' ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              >
+                {uploadingCover ? '⏳ Mengunggah Gambar...' : formMode === 'TAMBAH' ? 'Buat Judul Komik' : 'Simpan Perubahan'}
               </button>
             </form>
             {mangaStatusMsg && <p className="mt-2 text-xs text-orange-400 text-center font-medium bg-gray-950/30 p-2 rounded">{mangaStatusMsg}</p>}
@@ -226,11 +282,11 @@ export default function AdminPage() {
           <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
             <h2 className="text-xl font-bold text-orange-400 mb-4">2. Tambah Chapter Baru</h2>
             <form onSubmit={handleCreateChapter} className="space-y-4">
-              <select value={selectedMangaId} onChange={(e) => setSelectedMangaId(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm">
+              <select value={selectedMangaId} onChange={(e) => setSelectedMangaId(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required>
                 <option value="">-- Pilih Komik --</option>
                 {mangaList.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
               </select>
-              <input type="number" step="0.1" placeholder="Nomor Chapter (Misal: 1)" value={chapterNumber} onChange={(e) => setChapterNumber(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
+              <input type="number" step="0.1" placeholder="Nomor Chapter (Misal: 1)" value={chapterNumber} onChange={(e) => setChapterNumber(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required />
               <input type="text" placeholder="Judul/Nama Chapter (Opsional)" value={chapterTitle} onChange={(e) => setChapterTitle(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
               <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 font-bold py-2 rounded text-sm">Buat Chapter Baru</button>
             </form>
@@ -250,7 +306,6 @@ export default function AdminPage() {
 
         {/* SECTION 4: DAFTAR KONTEN DENGAN TOMBOL EDIT & HAPUS */}
         <div className="grid md:grid-cols-2 gap-8">
-          {/* Daftar Komik (Dilengkapi Tombol Edit & Hapus) */}
           <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
             <h2 className="text-xl font-bold text-gray-300 mb-4">Daftar Judul Komik</h2>
             <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
@@ -261,7 +316,6 @@ export default function AdminPage() {
                     <span className="text-xs text-gray-500">Slug: {m.slug} | ID: {m.id}</span>
                   </div>
                   <div className="flex gap-2">
-                    {/* TOMBOL EDIT BARU */}
                     <button onClick={() => startEditingManga(m)} className="text-xs bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1 rounded transition font-medium">
                       Edit
                     </button>
@@ -274,7 +328,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Daftar Chapter */}
           <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
             <h2 className="text-xl font-bold text-gray-300 mb-4">Daftar Chapter Terdaftar</h2>
             <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
