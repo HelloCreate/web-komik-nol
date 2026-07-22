@@ -1,14 +1,20 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
-// Memaksa data selalu segar tanpa cache lama
+// Memaksa halaman selalu mengambil data paling baru (anti cache)
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const { data: mangas } = await supabase
+  // Ambil data komik diurutkan berdasarkan ID terbaru
+  const { data: mangas, error } = await supabase
     .from('manga')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('id', { ascending: false });
+
+  if (error) {
+    console.error('Gagal mengambil data manga:', error.message);
+  }
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
@@ -39,7 +45,7 @@ export default async function HomePage() {
                       loading="lazy"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
+                    <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 p-2 text-center">
                       Tidak ada cover
                     </div>
                   )}
