@@ -33,7 +33,7 @@ export default function ReadChapterPage({ params }: ReadPageProps) {
 
       setLoading(true);
 
-      // 1. Ambil data manga berdasarkan slug
+      // 1. Ambil data komik berdasarkan slug
       const { data: mangaData, error: mangaErr } = await supabase
         .from('manga')
         .select('*')
@@ -73,7 +73,7 @@ export default function ReadChapterPage({ params }: ReadPageProps) {
 
       if (imgData) setImages(imgData);
 
-      // 4. Ambil semua list chapter untuk navigasi Prev/Next
+      // 4. Ambil list chapter untuk navigasi
       const { data: allChData } = await supabase
         .from('chapters')
         .select('id, chapter_number')
@@ -108,7 +108,6 @@ export default function ReadChapterPage({ params }: ReadPageProps) {
     );
   }
 
-  // Hitung Navigasi Chapter Sebelum & Sesudah
   const currentIndex = allChapters.findIndex((c) => c.chapter_number === chapterNumber);
   const prevChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : null;
   const nextChapter = currentIndex !== -1 && currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : null;
@@ -156,7 +155,7 @@ export default function ReadChapterPage({ params }: ReadPageProps) {
           )}
         </div>
 
-        {/* Area Gambar Komik */}
+        {/* Gambar Halaman Komik */}
         <div className="flex flex-col items-center bg-black min-h-[400px] rounded-xl overflow-hidden border border-gray-900 shadow-2xl">
           {images && images.length > 0 ? (
             images.map((img, idx) => (
