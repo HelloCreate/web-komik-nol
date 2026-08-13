@@ -1,8 +1,8 @@
+'use client';
+
+import { use, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-
-export const revalidate = 0;
 
 interface MangaDetailPageProps {
   params: Promise<{
@@ -10,33 +10,90 @@ interface MangaDetailPageProps {
   }>;
 }
 
-export default async function MangaDetailPage({ params }: MangaDetailPageProps) {
-  const { slug } = await params;
+export default function MangaDetailPage({ params }: MangaDetailPageProps) {
+  const resolvedParams = use(params);
+  const { slug } = resolvedParams;
 
-  // 1. Ambil detail data komik berdasarkan slug
-  const { data: manga, error } = await supabase
-    .from('manga')
-    .select('*')
-    .eq('slug', slug)
-    .single();
+  const [manga, setManga] = useState<any>(null);
+  const [chapters, setChapters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (error || !manga) {
-    notFound();
+  // Proteksi Global: Blokir Klik Kanan & Shortcut Simpan (Ctrl+S / Ctrl+U)
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault(); // Mematikan Klik Kanan Bawaan Browser
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Blokir Ctrl+S (Save) dan Ctrl+U (View Source)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'u' || e.key === 'S' || e.key === 'U')) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+
+      // Ambil data detail komik
+      const { data: mangaData } = await supabase
+        .from('manga')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+      if (mangaData) {
+        setManga(mangaData);
+
+        // Ambil list chapter
+        const { data: chData } = await supabase
+          .from('chapters')
+          .select('*')
+          .eq('manga_id', mangaData.id)
+          .order('chapter_number', { ascending: false });
+
+        if (chData) setChapters(chData);
+      }
+
+      setLoading(false);
+    }
+
+    fetchData();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gray-950 text-white p-12 text-center flex items-center justify-center">
+        <p className="text-orange-400 font-semibold text-sm animate-pulse">⏳ Memuat Detail Komik...</p>
+      </main>
+    );
   }
 
-  // 2. Ambil daftar chapter milik komik ini
-  const { data: chapters } = await supabase
-    .from('chapters')
-    .select('*')
-    .eq('manga_id', manga.id)
-    .order('chapter_number', { ascending: false });
+  if (!manga) {
+    return (
+      <main className="min-h-screen bg-gray-950 text-white p-12 text-center space-y-4">
+        <h1 className="text-2xl font-bold text-orange-500">Komik Tidak Ditemukan</h1>
+        <Link href="/" className="inline-block bg-gray-800 border border-gray-700 text-gray-300 text-xs px-4 py-2 rounded">
+          ← Kembali ke Beranda
+        </Link>
+      </main>
+    );
+  }
 
-  // Mengubah teks genre & theme dipisah koma menjadi badge/tombol kecil
   const genreList = manga.genre ? manga.genre.split(',').map((g: string) => g.trim()) : [];
   const themeList = manga.theme ? manga.theme.split(',').map((t: string) => t.trim()) : [];
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
+    <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12 select-none">
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* Navigasi Kembali */}
@@ -51,7 +108,12 @@ export default async function MangaDetailPage({ params }: MangaDetailPageProps) 
           <div className="w-full md:w-64 flex-shrink-0">
             <div className="aspect-[3/4] bg-gray-800 rounded-xl overflow-hidden border border-gray-700 shadow-md">
               {manga.cover_url ? (
-                <img src={manga.cover_url} alt={manga.title} className="w-full h-full object-cover" />
+                <img 
+                  src={manga.cover_url} 
+                  alt={manga.title} 
+                  className="w-full h-full object-cover" 
+                  onDragStart={(e) => e.preventDefault()}
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">Tidak ada cover</div>
               )}
@@ -80,8 +142,6 @@ export default async function MangaDetailPage({ params }: MangaDetailPageProps) 
                 <span className="text-gray-500 uppercase font-bold block mb-1">Artist</span>
                 <span className="text-gray-200">{manga.artist || '-'}</span>
               </div>
-              
-              {/* TAMBAHAN DEMOGRAPHIC */}
               <div>
                 <span className="text-gray-500 uppercase font-bold block mb-1">Demographic</span>
                 <span className="text-blue-400 font-semibold">{manga.demographic || '-'}</span>
@@ -102,7 +162,7 @@ export default async function MangaDetailPage({ params }: MangaDetailPageProps) 
               </div>
             )}
 
-            {/* TAMBAHAN THEME / TEMA */}
+            {/* THEME */}
             {themeList.length > 0 && (
               <div>
                 <span className="text-xs text-gray-500 uppercase font-bold block mb-2">Theme</span>
