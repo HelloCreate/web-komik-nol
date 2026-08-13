@@ -195,7 +195,7 @@ export default function MangaDetailPage({ params }: MangaDetailPageProps) {
               chapters.map((ch) => (
                 <Link
                   key={ch.id}
-                  href={/read/${manga.slug}/${ch.chapter_number}}
+                  href={`/read/${manga.slug}/${ch.chapter_number}`}
                   className="flex justify-between items-center bg-gray-800 hover:bg-gray-750 border border-gray-700/70 p-3.5 rounded-xl transition text-sm group"
                 >
                   <span className="font-semibold text-gray-200 group-hover:text-orange-400 transition">
