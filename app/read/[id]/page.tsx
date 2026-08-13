@@ -1,7 +1,8 @@
+'use client';
+
+import { use, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-
-export const revalidate = 0;
 
 interface ReadPageProps {
   params: Promise<{
@@ -9,31 +10,79 @@ interface ReadPageProps {
   }>;
 }
 
-export default async function ReadPage({ params }: ReadPageProps) {
-  const { id } = await params;
-  const chapterId = parseInt(id);
+export default function ReadPage({ params }: ReadPageProps) {
+  // Unwraps params di Client Component
+  const resolvedParams = use(params);
+  const chapterId = parseInt(resolvedParams.id);
 
-  if (isNaN(chapterId)) {
+  const [chapter, setChapter] = useState<any>(null);
+  const [images, setImages] = useState<any[]>([]);
+  const [allChapters, setAllChapters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    async function fetchData() {
+      if (isNaN(chapterId)) {
+        setErrorMsg('ID Chapter tidak valid');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      // 1. Ambil data chapter beserta detail komik
+      const { data: chData, error: chErr } = await supabase
+        .from('chapters')
+        .select('*, manga(*)')
+        .eq('id', chapterId)
+        .single();
+
+      if (chErr || !chData) {
+        setErrorMsg(`Chapter ID ${chapterId} tidak ditemukan`);
+        setLoading(false);
+        return;
+      }
+
+      setChapter(chData);
+
+      // 2. Ambil gambar-gambar halaman chapter
+      const { data: imgData } = await supabase
+        .from('chapter_images')
+        .select('*')
+        .eq('chapter_id', chapterId)
+        .order('page_number', { ascending: true });
+
+      if (imgData) setImages(imgData);
+
+      // 3. Ambil seluruh chapter milik komik ini untuk navigasi
+      const { data: allChData } = await supabase
+        .from('chapters')
+        .select('id, chapter_number')
+        .eq('manga_id', chData.manga_id)
+        .order('chapter_number', { ascending: true });
+
+      if (allChData) setAllChapters(allChData);
+
+      setLoading(false);
+    }
+
+    fetchData();
+  }, [chapterId]);
+
+  if (loading) {
     return (
-      <main className="min-h-screen bg-gray-950 text-white p-12 text-center">
-        <p className="text-red-400">❌ ID Chapter tidak valid: {id}</p>
-        <Link href="/" className="text-orange-500 underline mt-4 block">Kembali ke Beranda</Link>
+      <main className="min-h-screen bg-gray-950 text-white p-12 text-center flex items-center justify-center">
+        <p className="text-orange-400 font-semibold text-sm animate-pulse">⏳ Memuat Halaman Komik...</p>
       </main>
     );
   }
 
-  // 1. Ambil data chapter
-  const { data: chapter, error: chapterError } = await supabase
-    .from('chapters')
-    .select('*, manga(*)')
-    .eq('id', chapterId)
-    .single();
-
-  if (chapterError || !chapter) {
+  if (errorMsg || !chapter) {
     return (
       <main className="min-h-screen bg-gray-950 text-white p-12 text-center space-y-4">
-        <h1 className="text-2xl font-bold text-orange-500">Chapter Tidak Ditemukan</h1>
-        <p className="text-xs text-gray-400">Data Chapter dengan ID "{chapterId}" tidak ada di Supabase.</p>
+        <h1 className="text-2xl font-bold text-orange-500">Gagal Memuat</h1>
+        <p className="text-xs text-gray-400">{errorMsg}</p>
         <Link href="/" className="inline-block bg-gray-800 border border-gray-700 text-gray-300 text-xs px-4 py-2 rounded">
           ← Kembali ke Beranda
         </Link>
@@ -41,23 +90,10 @@ export default async function ReadPage({ params }: ReadPageProps) {
     );
   }
 
-  // 2. Ambil seluruh gambar halaman chapter ini
-  const { data: images } = await supabase
-    .from('chapter_images')
-    .select('*')
-    .eq('chapter_id', chapterId)
-    .order('page_number', { ascending: true });
-
-  // 3. Ambil daftar seluruh chapter komik ini
-  const { data: allChapters } = await supabase
-    .from('chapters')
-    .select('id, chapter_number')
-    .eq('manga_id', chapter.manga_id)
-    .order('chapter_number', { ascending: true });
-
-  const currentIndex = allChapters?.findIndex((c) => c.id === chapterId) ?? -1;
-  const prevChapter = currentIndex > 0 ? allChapters?.[currentIndex - 1] : null;
-  const nextChapter = currentIndex !== -1 && allChapters && currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : null;
+  // Hitung Chapter Sebelum & Sesudah
+  const currentIndex = allChapters.findIndex((c) => c.id === chapterId);
+  const prevChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : null;
+  const nextChapter = currentIndex !== -1 && currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : null;
 
   return (
     <main className="min-h-screen bg-gray-950 text-white pb-16 select-none">
@@ -102,7 +138,7 @@ export default async function ReadPage({ params }: ReadPageProps) {
           )}
         </div>
 
-        {/* Gambar Halaman Komik (Dilengkapi Fitur Anti-Save/Anti-Drag) */}
+        {/* Gambar Halaman Komik (Dengan Fitur Anti Klik Kanan & Anti Drag) */}
         <div className="flex flex-col items-center bg-black min-h-[400px] rounded-xl overflow-hidden border border-gray-900 shadow-2xl">
           {images && images.length > 0 ? (
             images.map((img, idx) => (
@@ -112,8 +148,8 @@ export default async function ReadPage({ params }: ReadPageProps) {
                 alt={`Halaman ${img.page_number}`}
                 className="w-full h-auto block select-none pointer-events-auto"
                 loading="lazy"
-                onContextMenu={(e) => e.preventDefault()} // Mencegah Klik Kanan
-                onDragStart={(e) => e.preventDefault()}    // Mencegah Drag Image
+                onContextMenu={(e) => e.preventDefault()} // Blokir Klik Kanan
+                onDragStart={(e) => e.preventDefault()}    // Blokir Drag Gambar
               />
             ))
           ) : (
