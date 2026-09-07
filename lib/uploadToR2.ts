@@ -1,6 +1,7 @@
-export async function uploadFile(file: File) {
+export async function uploadToR2(file: File, folder: string = 'chapters'): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('folder', folder);
 
   const res = await fetch('/api/upload-url', {
     method: 'POST',
@@ -8,8 +9,8 @@ export async function uploadFile(file: File) {
   });
 
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Upload gagal');
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Upload gagal dengan status ${res.status}`);
   }
 
   const data = await res.json();
