@@ -2,200 +2,224 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { uploadToR2 } from '@/lib/uploadToR2';
 import Link from 'next/link';
 
-export default function UploadPage() {
-  const [mangaList, setMangaList] = useState<any[]>([]);
-  const [selectedMangaId, setSelectedMangaId] = useState('');
-  const [chapters, setChapters] = useState<any[]>([]);
-  const [selectedChapterId, setSelectedChapterId] = useState('');
-  
+export default function UploadChapterPage() {
+  const [mangas, setMangas] = useState<any[]>([]);
+  const [selectedMangaId, setSelectedMangaId] = useState<string>('');
+  const [chapterNumber, setChapterNumber] = useState<string>('');
+  const [chapterTitle, setChapterTitle] = useState<string>('');
   const [files, setFiles] = useState<FileList | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('');
 
-  // 1. Ambil daftar komik saat halaman pertama kali dimuat
+  const [loading, setLoading] = useState<boolean>(false);
+  const [progressMsg, setProgressMsg] = useState<string>('');
+  const [successMsg, setSuccessMsg] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+
+  // Ambil daftar komik untuk dropdown
   useEffect(() => {
     async function fetchMangas() {
-      const { data } = await supabase.from('manga').select('id, title').order('title', { ascending: true });
-      if (data) setMangaList(data);
+      const { data, error } = await supabase
+        .from('manga')
+        .select('id, title')
+        .order('title', { ascending: true });
+
+      if (!error && data) {
+        setMangas(data);
+        if (data.length > 0) setSelectedMangaId(data[0].id.toString());
+      }
     }
     fetchMangas();
   }, []);
 
-  // 2. Ambil daftar chapter begitu komik dipilih
-  useEffect(() => {
-    async function fetchChapters() {
-      if (!selectedMangaId) {
-        setChapters([]);
-        return;
-      }
-      const { data } = await supabase
-        .from('chapters')
-        .select('id, chapter_number')
-        .eq('manga_id', parseInt(selectedMangaId))
-        .order('chapter_number', { ascending: true });
-      
-      if (data) setChapters(data);
-    }
-    fetchChapters();
-  }, [selectedMangaId]);
-
-  // 3. Fungsi Unggah Gambar Borongan
-  const handleUploadBorongan = async (e: React.FormEvent) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedChapterId || !files || files.length === 0) {
-      setStatusMsg('❌ Silakan pilih chapter dan file gambar terlebih dahulu!');
+    setErrorMsg('');
+    setSuccessMsg('');
+    setProgressMsg('');
+
+    if (!selectedMangaId) {
+      setErrorMsg('Pilih komik terlebih dahulu!');
+      return;
+    }
+    if (!chapterNumber) {
+      setErrorMsg('Nomor chapter wajib diisi!');
+      return;
+    }
+    if (!files || files.length === 0) {
+      setErrorMsg('Pilih minimal satu gambar halaman!');
       return;
     }
 
-    setUploading(true);
-    setStatusMsg('⏳ Memulai proses unggah borongan...');
+    setLoading(true);
 
-    // Ubah FileList menjadi Array dan urutkan berdasarkan nama file secara alfabetis
-    const fileArray = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    try {
+      // 1. Cek atau Buat data Chapter baru di Supabase Database
+      setProgressMsg('Membuat data chapter di database...');
+      const chNum = parseFloat(chapterNumber);
 
-    let successCount = 0;
+      const { data: chapterData, error: chapterErr } = await supabase
+        .from('chapters')
+        .insert({
+          manga_id: parseInt(selectedMangaId),
+          chapter_number: chNum,
+          title: chapterTitle || null,
+        })
+        .select()
+        .single();
 
-    for (let i = 0; i < fileArray.length; i++) {
-      const file = fileArray[i];
-      const pageNumber = i + 1;
-      
-      // Susun nama file unik di Storage Supabase: contoh "chapter_22/page_1_17182910.jpg"
-      const fileExt = file.name.split('.').pop();
-      const fileName = `chapter_${selectedChapterId}/page_${pageNumber}_${Date.now()}.${fileExt}`;
-
-      setStatusMsg(`⏳ Mengunggah halaman ${pageNumber} dari ${fileArray.length}...`);
-
-      // A. Upload file fisik gambar ke Supabase Storage Bucket 'komik-images'
-      const { data: storageData, error: storageError } = await supabase.storage
-        .from('komik-images')
-        .upload(fileName, file, { cacheControl: '3600', upsert: true });
-
-      if (storageError) {
-        console.error(`Gagal upload file ke storage pada halaman ${pageNumber}:`, storageError.message);
-        continue;
+      if (chapterErr || !chapterData) {
+        throw new Error(chapterErr?.message || 'Gagal membuat chapter baru');
       }
 
-      // Dapatkan URL Publik resmi dari file gambar yang baru saja diupload
-      const { data: publicUrlData } = supabase.storage
-        .from('komik-images')
-        .getPublicUrl(fileName);
+      // 2. Upload file gambar satu per satu ke Cloudflare R2
+      // Urutkan file berdasarkan nama file (misal: 01.jpg, 02.jpg)
+      const fileArray = Array.from(files).sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
 
-      const publicUrl = publicUrlData.publicUrl;
+      const totalFiles = fileArray.length;
+      const uploadedImagesData: { chapter_id: number; page_number: number; image_url: string }[] = [];
 
-      // B. Simpan data alamat URL link gambar tersebut ke tabel 'chapter_images'
-      const { error: dbError } = await supabase
+      for (let i = 0; i < totalFiles; i++) {
+        const file = fileArray[i];
+        const pageNum = i + 1;
+        setProgressMsg(`Mengunggah ke Cloudflare R2: Halaman ${pageNum} dari ${totalFiles}...`);
+
+        // Upload ke folder 'chapters' di R2
+        const r2Url = await uploadToR2(file, 'chapters');
+
+        uploadedImagesData.push({
+          chapter_id: chapterData.id,
+          page_number: pageNum,
+          image_url: r2Url,
+        });
+      }
+
+      // 3. Simpan URL Cloudflare R2 ke tabel chapter_images di Supabase
+      setProgressMsg('Menyimpan tautan gambar ke database...');
+      const { error: imgErr } = await supabase
         .from('chapter_images')
-        .insert([{
-          chapter_id: parseInt(selectedChapterId),
-          image_url: publicUrl,
-          page_number: pageNumber
-        }]);
+        .insert(uploadedImagesData);
 
-      if (dbError) {
-        console.error(`Gagal mencatat data ke database pada halaman ${pageNumber}:`, dbError.message);
-      } else {
-        successCount++;
-      }
+      if (imgErr) throw new Error(imgErr.message);
+
+      setSuccessMsg(`Berhasil! Chapter ${chapterNumber} dengan ${totalFiles} halaman telah diunggah ke Cloudflare R2.`);
+      setChapterNumber('');
+      setChapterTitle('');
+      setFiles(null);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Terjadi kesalahan saat mengunggah.');
+    } finally {
+      setLoading(false);
+      setProgressMsg('');
     }
-
-    setUploading(false);
-    setStatusMsg(`🎉 Sukses mengunggah ${successCount} dari ${fileArray.length} halaman komik!`);
-    setFiles(null);
-    // Reset form input file secara manual
-    const fileInput = document.getElementById('file-input') as HTMLInputElement;
-    if (fileInput) fileInput.value = '';
   };
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
-      <div className="max-w-xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
-        
-        {/* Navigasi Atas & Status Proteksi Keamanan */}
-        <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-6">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-orange-500">Panel Upload Borongan</h1>
-            <p className="text-xs text-green-400 font-medium">🛡️ Sesi Terlindungi</p>
+      <div className="max-w-2xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
+        <div className="flex justify-between items-center border-b border-gray-800 pb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-orange-500">Upload Chapter Komik</h1>
+            <p className="text-xs text-gray-400 mt-1">Penyimpanan otomatis ke Cloudflare R2 (Bebas Batas Bandwidth)</p>
           </div>
-          <div className="flex gap-3 items-center">
-            <Link href="/admin" className="bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2 rounded text-sm font-semibold transition">
-              ← Panel Admin
-            </Link>
-            <button 
-              onClick={() => {
-                // Menghapus cookie tanda login admin agar sistem mengunci kembali secara global
-                document.cookie = "admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict";
-                window.location.href = '/login';
-              }}
-              className="bg-gray-800 hover:bg-red-700 border border-gray-700 hover:border-red-600 text-gray-300 hover:text-white px-3 py-2 rounded text-sm font-semibold transition"
-            >
-              Logout
-            </button>
-          </div>
+          <Link href="/" className="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded text-gray-300 transition">
+            ← Beranda
+          </Link>
         </div>
 
-        {/* Form Input Upload Gambar */}
-        <form onSubmit={handleUploadBorongan} className="space-y-5">
-          <div>
-            <label className="block text-xs uppercase text-gray-400 font-semibold mb-1">1. Pilih Judul Komik</label>
-            <select 
-              value={selectedMangaId} 
-              onChange={(e) => { setSelectedMangaId(e.target.value); setSelectedChapterId(''); }}
-              className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-sm text-gray-200 focus:outline-none focus:border-orange-500"
-              required
-            >
-              <option value="">-- Pilih Komik --</option>
-              {mangaList.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
-            </select>
+        {errorMsg && (
+          <div className="bg-red-900/40 border border-red-700/60 p-3 rounded-lg text-xs text-red-300">
+            ❌ {errorMsg}
           </div>
+        )}
 
+        {successMsg && (
+          <div className="bg-green-900/40 border border-green-700/60 p-3 rounded-lg text-xs text-green-300">
+            ✅ {successMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleUpload} className="space-y-5 text-sm">
+          {/* Pilih Komik */}
           <div>
-            <label className="block text-xs uppercase text-gray-400 font-semibold mb-1">2. Pilih Target Chapter</label>
-            <select 
-              value={selectedChapterId} 
-              onChange={(e) => setSelectedChapterId(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded p-2.5 text-sm text-gray-200 focus:outline-none focus:border-orange-500"
-              disabled={!selectedMangaId}
+            <label className="block text-xs font-semibold text-gray-400 mb-2">Pilih Komik</label>
+            <select
+              value={selectedMangaId}
+              onChange={(e) => setSelectedMangaId(e.target.value)}
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-xs"
               required
             >
-              <option value="">-- Pilih Chapter --</option>
-              {chapters.map((ch) => (
-                <option key={ch.id} value={ch.id}>Chapter {ch.chapter_number} (ID: {ch.id})</option>
+              {mangas.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title}
+                </option>
               ))}
             </select>
           </div>
 
+          {/* Nomor & Judul Chapter */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 mb-2">Nomor Chapter (contoh: 1 atau 1.5)</label>
+              <input
+                type="number"
+                step="any"
+                value={chapterNumber}
+                onChange={(e) => setChapterNumber(e.target.value)}
+                placeholder="1"
+                className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-xs"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 mb-2">Judul Chapter (Opsional)</label>
+              <input
+                type="text"
+                value={chapterTitle}
+                onChange={(e) => setChapterTitle(e.target.value)}
+                placeholder="Awal Mula..."
+                className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Input File Gambar */}
           <div>
-            <label className="block text-xs uppercase text-gray-400 font-semibold mb-1">3. Pilih File Gambar Komik (Bisa Banyak Sekaligus)</label>
-            <input 
-              id="file-input"
-              type="file" 
-              multiple 
+            <label className="block text-xs font-semibold text-gray-400 mb-2">
+              Pilih Gambar Halaman (Bisa pilih banyak sekaligus)
+            </label>
+            <input
+              type="file"
+              multiple
               accept="image/*"
               onChange={(e) => setFiles(e.target.files)}
-              className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-600/20 file:text-orange-400 hover:file:bg-orange-600/30"
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-600 file:text-white hover:file:bg-orange-500 cursor-pointer"
               required
             />
-            <p className="text-[11px] text-gray-500 mt-1">Tips: Pastikan urutan nama file gambar kamu rapi (misal: 01.jpg, 02.png, dst.) agar halaman tersusun berurutan.</p>
+            {files && (
+              <p className="text-[11px] text-gray-400 mt-2">
+                Terpilih: <strong className="text-orange-400">{files.length}</strong> gambar
+              </p>
+            )}
           </div>
 
-          <button 
-            type="submit" 
-            disabled={uploading}
-            className={`w-full font-bold py-2.5 rounded text-sm transition ${uploading ? 'bg-orange-800 text-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+          {/* Tombol Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 rounded-lg font-bold transition text-xs ${
+              loading
+                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                : 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-600/30'
+            }`}
           >
-            {uploading ? '⏳ Sedang Memproses...' : '🚀 Mulai Upload Borongan'}
+            {loading ? progressMsg || 'Sedang memproses...' : 'Mulai Unggah ke Cloudflare R2'}
           </button>
         </form>
-
-        {/* Notifikasi Status Aksi */}
-        {statusMsg && (
-          <div className="mt-5 text-center p-3 bg-gray-950/40 rounded border border-gray-800 text-xs text-orange-400 font-medium leading-relaxed">
-            {statusMsg}
-          </div>
-        )}
-
       </div>
     </main>
   );
