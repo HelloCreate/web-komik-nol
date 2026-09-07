@@ -18,9 +18,6 @@ export async function uploadToR2(file: File, folder: string = 'general'): Promis
   // 2. Upload file fisik langsung ke Cloudflare R2
   const uploadRes = await fetch(data.uploadUrl, {
     method: 'PUT',
-    headers: {
-      'Content-Type': file.type,
-    },
     body: file,
   });
 
