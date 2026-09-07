@@ -1,357 +1,177 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/db';
 import Link from 'next/link';
 
+interface Manga {
+  id: number;
+  title: string;
+  slug: string;
+  cover_url?: string;
+  description?: string;
+}
+
 export default function AdminPage() {
-  const [mangaList, setMangaList] = useState<any[]>([]);
-  const [activeChapters, setActiveChapters] = useState<any[]>([]);
-
-  const [formMode, setFormMode] = useState<'TAMBAH' | 'EDIT'>('TAMBAH');
-  const [selectedMangaIdForEdit, setSelectedMangaIdForEdit] = useState<number | null>(null);
-
-  // State Form Komik
+  const [mangas, setMangas] = useState<Manga[]>([]);
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
-  const [synopsis, setSynopsis] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [type, setType] = useState('Manga');
-  const [status, setStatus] = useState('Ongoing');
-  const [genre, setGenre] = useState('');
-  const [theme, setTheme] = useState(''); // State Baru
-  const [demographic, setDemographic] = useState('Shounen'); // State Baru
-  const [author, setAuthor] = useState('');
-  const [artist, setArtist] = useState('');
-  
-  const [mangaStatusMsg, setMangaStatusMsg] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
 
-  const [selectedMangaId, setSelectedMangaId] = useState('');
-  const [chapterNumber, setChapterNumber] = useState('');
-  const [chapterTitle, setChapterTitle] = useState('');
-  const [chapterStatusMsg, setChapterStatusMsg] = useState('');
-
-  const [targetChapterId, setTargetChapterId] = useState('');
-  const [deletePageMsg, setDeletePageMsg] = useState('');
-
-  const refreshData = async () => {
-    const { data: mangas } = await supabase.from('manga').select('*').order('title', { ascending: true });
-    if (mangas) setMangaList(mangas);
-
-    const { data: chs } = await supabase.from('chapters').select('id, chapter_number, manga(title)').order('id', { ascending: false });
-    if (chs) setActiveChapters(chs);
+  const fetchMangas = async () => {
+    try {
+      const res = await fetch('/api/admin/mangas');
+      const data = await res.json();
+      if (Array.isArray(data)) setMangas(data);
+    } catch (err: any) {
+      console.error(err.message);
+    }
   };
 
   useEffect(() => {
-    refreshData();
+    fetchMangas();
   }, []);
 
-  const startEditingManga = (manga: any) => {
-    setFormMode('EDIT');
-    setSelectedMangaIdForEdit(manga.id);
-    setTitle(manga.title || '');
-    setSlug(manga.slug || '');
-    setSynopsis(manga.synopsis || '');
-    setCoverUrl(manga.cover_url || '');
-    setCoverFile(null);
-    setType(manga.type || 'Manga');
-    setStatus(manga.status || 'Ongoing');
-    setGenre(manga.genre || '');
-    setTheme(manga.theme || ''); // Read Theme
-    setDemographic(manga.demographic || 'Shounen'); // Read Demographic
-    setAuthor(manga.author || '');
-    setArtist(manga.artist || '');
-    setMangaStatusMsg(`✍️ Sedang mengedit komik: ${manga.title}`);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const cancelEditingManga = () => {
-    setFormMode('TAMBAH');
-    setSelectedMangaIdForEdit(null);
-    setTitle(''); setSlug(''); setSynopsis(''); setCoverUrl(''); setCoverFile(null);
-    setGenre(''); setTheme(''); setDemographic('Shounen'); setAuthor(''); setArtist(''); 
-    setType('Manga'); setStatus('Ongoing');
-    setMangaStatusMsg('');
-  };
-
-  const handleMangaSubmit = async (e: React.FormEvent) => {
+  const handleCreateManga = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !slug) return;
+    setLoading(true);
+    setMsg('');
 
-    setUploadingCover(true);
-    let finalCoverUrl = coverUrl;
+    try {
+      const res = await fetch('/api/admin/mangas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, slug, coverUrl, description }),
+      });
 
-    if (coverFile) {
-      setMangaStatusMsg('⏳ Mengunggah gambar cover...');
-      const fileExt = coverFile.name.split('.').pop();
-      const fileName = `covers/cover_${Date.now()}.${fileExt}`;
-
-      const { error: storageError } = await supabase.storage
-        .from('komik-images')
-        .upload(fileName, coverFile, { cacheControl: '3600', upsert: true });
-
-      if (storageError) {
-        setMangaStatusMsg(`Gagal upload cover: ${storageError.message}`);
-        setUploadingCover(false);
-        return;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Gagal menambahkan komik');
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('komik-images')
-        .getPublicUrl(fileName);
-
-      finalCoverUrl = publicUrlData.publicUrl;
-    }
-
-    const mangaData = { 
-      title, 
-      slug, 
-      synopsis, 
-      cover_url: finalCoverUrl, 
-      type, 
-      status, 
-      genre, 
-      theme,          // Simpan Theme
-      demographic,    // Simpan Demographic
-      author, 
-      artist 
-    };
-
-    if (formMode === 'TAMBAH') {
-      const { error } = await supabase.from('manga').insert([mangaData]);
-      if (error) setMangaStatusMsg(`Gagal Tambah: ${error.message}`);
-      else {
-        setMangaStatusMsg('🎉 Judul komik baru berhasil ditambahkan!');
-        cancelEditingManga();
-        refreshData();
-      }
-    } else {
-      if (!selectedMangaIdForEdit) return;
-      const { error } = await supabase.from('manga').update(mangaData).eq('id', selectedMangaIdForEdit);
-      if (error) setMangaStatusMsg(`Gagal Update: ${error.message}`);
-      else {
-        setMangaStatusMsg('💾 Perubahan data komik berhasil disimpan!');
-        cancelEditingManga();
-        refreshData();
-      }
-    }
-
-    setUploadingCover(false);
-  };
-
-  const handleCreateChapter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMangaId || !chapterNumber) return;
-    const { data, error } = await supabase.from('chapters').insert([{ manga_id: parseInt(selectedMangaId), chapter_number: parseFloat(chapterNumber), title: chapterTitle }]).select().single();
-    if (error) setChapterStatusMsg(`Gagal: ${error.message}`);
-    else {
-      setChapterStatusMsg(`🎉 Chapter dibuat! ID = ${data.id}`);
-      setChapterNumber(''); setChapterTitle('');
-      refreshData();
+      setMsg('Komik berhasil ditambahkan!');
+      setTitle('');
+      setSlug('');
+      setCoverUrl('');
+      setDescription('');
+      fetchMangas();
+    } catch (err: any) {
+      setMsg(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeleteManga = async (id: number, mangaTitle: string) => {
-    if (!confirm(`Hapus komik "${mangaTitle}"?`)) return;
-    const { error } = await supabase.from('manga').delete().eq('id', id);
-    if (error) alert(`Gagal menghapus: ${error.message}`);
-    else {
-      if (selectedMangaIdForEdit === id) cancelEditingManga();
-      refreshData();
-    }
-  };
+  const handleDeleteManga = async (id: number) => {
+    if (!confirm('Yakin ingin menghapus komik ini?')) return;
 
-  const handleDeleteChapter = async (id: number, num: number, mangaTitle: string) => {
-    if (!confirm(`Hapus Chapter ${num} dari komik ${mangaTitle}?`)) return;
-    const { error } = await supabase.from('chapters').delete().eq('id', id);
-    if (error) alert(`Gagal menghapus chapter: ${error.message}`);
-    else refreshData();
-  };
-
-  const handleDeleteAllPagesInChapter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetChapterId) return;
-    if (!confirm(`Yakin mengosongkan halaman di Chapter ID ${targetChapterId}?`)) return;
-    const { error } = await supabase.from('chapter_images').delete().eq('chapter_id', parseInt(targetChapterId));
-    if (error) setDeletePageMsg(`Gagal: ${error.message}`);
-    else {
-      setDeletePageMsg(`🎉 Halaman di Chapter ID ${targetChapterId} dikosongkan!`);
-      setTargetChapterId('');
+    try {
+      const res = await fetch(`/api/admin/mangas?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Gagal menghapus komik');
+      fetchMangas();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
-      <div className="max-w-6xl mx-auto space-y-12">
-        
-        <div className="flex justify-between items-center border-b border-gray-800 pb-4">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-orange-500">Panel Admin & Manajemen</h1>
-            <p className="text-xs text-green-400 font-medium">🛡️ Sesi Admin Aktif</p>
-          </div>
-          <div className="flex gap-3 items-center">
-            <Link href="/upload" className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded text-sm font-semibold transition">
-              → Ke Halaman Upload
+    <div className="min-h-screen bg-slate-900 text-white p-8">
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          <div className="space-x-3">
+            <Link href="/upload" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded">
+              Upload Chapter
             </Link>
-            <button 
-              onClick={() => {
-                document.cookie = "admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict";
-                window.location.href = '/login';
-              }}
-              className="bg-gray-800 hover:bg-red-700 border border-gray-700 hover:border-red-600 text-gray-300 hover:text-white px-3 py-2 rounded text-sm font-semibold transition"
-            >
-              Logout
-            </button>
+            <Link href="/" className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded">
+              Beranda
+            </Link>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* FORM TAMBAH/EDIT KOMIK */}
-          <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-orange-400">
-                {formMode === 'TAMBAH' ? '1. Tambah Judul Komik Baru' : '📝 Mode Edit Data Komik'}
-              </h2>
-              {formMode === 'EDIT' && (
-                <button type="button" onClick={cancelEditingManga} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 px-2 py-1 rounded">
-                  Batal Edit
+        {msg && (
+          <div className="p-3 bg-blue-500/20 border border-blue-500 rounded text-blue-200">
+            {msg}
+          </div>
+        )}
+
+        {/* Form Tambah Manga */}
+        <form onSubmit={handleCreateManga} className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+          <h2 className="text-xl font-bold">Tambah Komik Baru</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm mb-1">Judul Komik</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Slug URL (unik)</label>
+              <input
+                type="text"
+                placeholder="contoh: naruto-shippuden"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                required
+                className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Cover URL (Cloudflare R2)</label>
+            <input
+              type="text"
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Deskripsi</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-500 px-6 py-2.5 rounded font-medium"
+          >
+            {loading ? 'Menyimpan...' : 'Simpan Komik'}
+          </button>
+        </form>
+
+        {/* Daftar Manga */}
+        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+          <h2 className="text-xl font-bold mb-4">Daftar Komik Terdaftar</h2>
+          <div className="divide-y divide-slate-700">
+            {mangas.map((manga) => (
+              <div key={manga.id} className="py-3 flex justify-between items-center">
+                <div>
+                  <p className="font-semibold">{manga.title}</p>
+                  <p className="text-xs text-slate-400">/{manga.slug}</p>
+                </div>
+                <button
+                  onClick={() => handleDeleteManga(manga.id)}
+                  className="text-red-400 hover:text-red-300 text-sm"
+                >
+                  Hapus
                 </button>
-              )}
-            </div>
-            
-            <form onSubmit={handleMangaSubmit} className="space-y-4">
-              <input type="text" placeholder="Judul Komik" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required />
-              <input type="text" placeholder="Slug URL (Contoh: solo-leveling)" value={slug} onChange={(e) => setSlug(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required />
-              
-              <div>
-                <label className="block text-xs text-gray-400 font-semibold mb-1">Upload Gambar Cover:</label>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) setCoverFile(e.target.files[0]);
-                  }}
-                  className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-600/20 file:text-orange-400 hover:file:bg-orange-600/30"
-                />
               </div>
-
-              {/* GENRE, THEME, DEMOGRAPHIC */}
-              <input type="text" placeholder="Genre (Contoh: Action, Adventure, Fantasy)" value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-              
-              <input type="text" placeholder="Theme / Tema (Contoh: Isekai, Reincarnation, School)" value={theme} onChange={(e) => setTheme(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-gray-400 font-semibold mb-1">Demographic:</label>
-                  <select value={demographic} onChange={(e) => setDemographic(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-gray-300">
-                    <option value="Shounen">Shounen</option>
-                    <option value="Seinen">Seinen</option>
-                    <option value="Shoujo">Shoujo</option>
-                    <option value="Josei">Josei</option>
-                    <option value="Kids">Kids</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 font-semibold mb-1">Tipe:</label>
-                  <select value={type} onChange={(e) => setType(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-gray-300">
-                    <option value="Manga">Manga</option>
-                    <option value="Manhwa">Manhwa</option>
-                    <option value="Manhua">Manhua</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" placeholder="Author / Penulis" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-                <input type="text" placeholder="Artist / Penggambar" value={artist} onChange={(e) => setArtist(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-              </div>
-              
-              <textarea placeholder="Sinopsis Komik..." value={synopsis} onChange={(e) => setSynopsis(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm h-20" />
-              
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-gray-300">
-                <option value="Ongoing">Ongoing</option>
-                <option value="Completed">Completed</option>
-              </select>
-
-              <button 
-                type="submit" 
-                disabled={uploadingCover}
-                className={`w-full font-bold py-2 rounded text-sm transition ${uploadingCover ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : formMode === 'TAMBAH' ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
-              >
-                {uploadingCover ? '⏳ Mengunggah Data...' : formMode === 'TAMBAH' ? 'Buat Judul Komik' : 'Simpan Perubahan'}
-              </button>
-            </form>
-            {mangaStatusMsg && <p className="mt-2 text-xs text-orange-400 text-center font-medium bg-gray-950/30 p-2 rounded">{mangaStatusMsg}</p>}
-          </div>
-
-          {/* FORM TAMBAH CHAPTER */}
-          <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
-            <h2 className="text-xl font-bold text-orange-400 mb-4">2. Tambah Chapter Baru</h2>
-            <form onSubmit={handleCreateChapter} className="space-y-4">
-              <select value={selectedMangaId} onChange={(e) => setSelectedMangaId(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required>
-                <option value="">-- Pilih Komik --</option>
-                {mangaList.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
-              </select>
-              <input type="number" step="0.1" placeholder="Nomor Chapter (Misal: 1)" value={chapterNumber} onChange={(e) => setChapterNumber(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" required />
-              <input type="text" placeholder="Judul/Nama Chapter (Opsional)" value={chapterTitle} onChange={(e) => setChapterTitle(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm" />
-              <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 font-bold py-2 rounded text-sm">Buat Chapter Baru</button>
-            </form>
-            {chapterStatusMsg && <p className="mt-2 text-xs text-orange-400 text-center">{chapterStatusMsg}</p>}
+            ))}
+            {mangas.length === 0 && <p className="text-slate-400 text-sm">Belum ada komik.</p>}
           </div>
         </div>
-
-        {/* SECTION 3 & DAFTAR */}
-        <div className="bg-gray-900 border border-red-950 p-6 rounded-xl shadow-lg">
-          <h2 className="text-xl font-bold text-red-400 mb-2">3. Kosongkan Halaman Gambar</h2>
-          <form onSubmit={handleDeleteAllPagesInChapter} className="flex gap-4 max-w-md">
-            <input type="number" placeholder="ID Chapter" value={targetChapterId} onChange={(e) => setTargetChapterId(e.target.value)} className="bg-gray-800 border border-gray-700 rounded p-2 text-sm flex-1" />
-            <button type="submit" className="bg-red-700 hover:bg-red-800 text-white font-bold px-4 py-2 rounded text-sm transition">Kosongkan Halaman</button>
-          </form>
-          {deletePageMsg && <p className="mt-2 text-xs text-red-400">{deletePageMsg}</p>}
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
-            <h2 className="text-xl font-bold text-gray-300 mb-4">Daftar Judul Komik</h2>
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-              {mangaList.map((m) => (
-                <div key={m.id} className="flex justify-between items-center bg-gray-800 p-3 rounded border border-gray-700 text-sm">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-gray-200">{m.title}</span>
-                    <span className="text-xs text-gray-500">Slug: {m.slug} | Demo: {m.demographic || '-'}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => startEditingManga(m)} className="text-xs bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1 rounded transition font-medium">
-                      Edit
-                    </button>
-                    <button onClick={() => handleDeleteManga(m.id, m.title)} className="text-xs bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-2 py-1 rounded transition">
-                      Hapus
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
-            <h2 className="text-xl font-bold text-gray-300 mb-4">Daftar Chapter Terdaftar</h2>
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-              {activeChapters.map((ch) => (
-                <div key={ch.id} className="flex justify-between items-center bg-gray-800 p-3 rounded border border-gray-700 text-sm">
-                  <div>
-                    <span className="text-orange-400 font-medium">Ch {ch.chapter_number}</span>
-                    <span className="text-gray-400 text-xs block">Komik: {ch.manga?.title || 'Unknown'} (ID: {ch.id})</span>
-                  </div>
-                  <button onClick={() => handleDeleteChapter(ch.id, ch.chapter_number, ch.manga?.title)} className="text-xs bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-2 py-1 rounded transition">Hapus</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
       </div>
-    </main>
+    </div>
   );
 }
