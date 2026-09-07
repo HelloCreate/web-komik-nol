@@ -14,10 +14,11 @@ export async function POST(req: Request) {
     const uniqueKey = `${folder}/${Date.now()}-${filename.replace(/\s+/g, '_')}`;
 
     const command = new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
-      Key: uniqueKey,
-      ContentType: fileType,
-    });
+  Bucket: process.env.R2_BUCKET_NAME,
+  Key: key,
+  ContentType: contentType,
+  ChecksumAlgorithm: undefined, // Menghilangkan parameter checksum yang ditolak R2
+});
 
     const uploadUrl = await getSignedUrl(r2, command, { expiresIn: 300 });
     const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${uniqueKey}`;
