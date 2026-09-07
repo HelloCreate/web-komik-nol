@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/db';
 import { uploadToR2 } from '@/lib/uploadToR2';
 import Link from 'next/link';
 

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 

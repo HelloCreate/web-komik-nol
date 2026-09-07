@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/db';
 import Link from 'next/link';
 
 // Memaksa halaman selalu mengambil data paling baru (anti cache)
