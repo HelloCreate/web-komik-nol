@@ -1,77 +1,70 @@
-import { supabase } from '@/lib/db';
 import Link from 'next/link';
+import { queryD1 } from '@/lib/db';
 
-// Memaksa halaman selalu mengambil data paling baru (anti cache)
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 export default async function HomePage() {
-  // Ambil data komik diurutkan berdasarkan ID terbaru
-  const { data: mangas, error } = await supabase
-    .from('manga')
-    .select('*')
-    .order('id', { ascending: false });
-
-  if (error) {
-    console.error('Gagal mengambil data manga:', error.message);
-  }
+  const mangas = await queryD1<any>(
+    'SELECT * FROM mangas ORDER BY id DESC'
+  );
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
+    <div className="min-h-screen bg-slate-900 text-white p-6 md:p-12">
       <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* Header Title */}
-        <div className="border-b border-gray-800 pb-4">
-          <h1 className="text-3xl font-extrabold text-orange-500">Yanama Komik</h1>
-          <p className="text-sm text-gray-400 mt-1">Situs Baca Manhwa & Manga Favoritmu</p>
-        </div>
+        <header className="flex justify-between items-center border-b border-slate-800 pb-6">
+          <h1 className="text-3xl font-bold tracking-tight text-amber-400">Yanama Comic</h1>
+          <div className="space-x-3">
+            <Link
+              href="/admin"
+              className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm border border-slate-700 transition"
+            >
+              Admin
+            </Link>
+            <Link
+              href="/upload"
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition"
+            >
+              Upload Chapter
+            </Link>
+          </div>
+        </header>
 
-        {/* Grid Daftar Komik */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-          {mangas && mangas.length > 0 ? (
-            mangas.map((manga) => (
-              <Link 
-                key={manga.id} 
+        <section>
+          <h2 className="text-xl font-semibold mb-6">Daftar Komik</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            {mangas.map((manga) => (
+              <Link
+                key={manga.id}
                 href={`/manga/${manga.slug}`}
-                className="group bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-orange-500 transition-all duration-300 flex flex-col"
+                className="group bg-slate-800 rounded-xl overflow-hidden border border-slate-700/60 hover:border-amber-400/50 transition duration-200"
               >
-                {/* Pembungkus Gambar Sampul */}
-                <div className="relative aspect-[3/4] w-full bg-gray-800 overflow-hidden">
+                <div className="aspect-[3/4] bg-slate-950 relative overflow-hidden">
                   {manga.cover_url ? (
-                    <img 
-                      src={manga.cover_url} 
+                    <img
+                      src={manga.cover_url}
                       alt={manga.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 p-2 text-center">
-                      Tidak ada cover
+                    <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">
+                      No Cover
                     </div>
                   )}
-
-                  <span className="absolute bottom-2 left-2 bg-orange-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">
-                    {manga.type || 'Manga'}
-                  </span>
                 </div>
-
-                {/* Info Judul Komik */}
-                <div className="p-3 flex-1 flex flex-col justify-between">
-                  <h2 className="font-bold text-sm text-gray-100 group-hover:text-orange-400 line-clamp-2 transition-colors">
+                <div className="p-3">
+                  <h3 className="font-semibold text-sm line-clamp-1 group-hover:text-amber-400 transition">
                     {manga.title}
-                  </h2>
-                  <span className="text-[11px] text-gray-400 mt-2 block">
-                    {manga.status || 'Ongoing'}
-                  </span>
+                  </h3>
                 </div>
               </Link>
-            ))
-          ) : (
-            <p className="col-span-full text-gray-500 text-sm">Belum ada komik yang ditambahkan.</p>
-          )}
-        </div>
+            ))}
+          </div>
 
+          {mangas.length === 0 && (
+            <p className="text-slate-500 text-center py-20">Belum ada komik yang tersedia.</p>
+          )}
+        </section>
       </div>
-    </main>
+    </div>
   );
 }
