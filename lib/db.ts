@@ -1,7 +1,30 @@
-import { createClient } from '@supabase/supabase-js';
+export async function queryD1<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.R2_ACCOUNT_ID;
+  const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
+  const apiToken = process.env.CLOUDFLARE_D1_API_TOKEN;
 
-// Ganti teks di bawah ini langsung dengan URL dan Anon Key milikmu dari Supabase
-const supabaseUrl = 'https://arvecyzwwxuuxfkzvpmf.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFydmVjeXp3d3h1dXhma3p2cG1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0OTQ4MDYsImV4cCI6MjEwMDA3MDgwNn0.TZAuPhI8cggbAraLmhlDF78yitGhZipJ93-LXhBwt8U';
+  if (!accountId || !databaseId || !apiToken) {
+    throw new Error('Konfigurasi environment variable Cloudflare D1 belum lengkap');
+  }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql, params }),
+      cache: 'no-store',
+    }
+  );
+
+  const data = await response.json();
+
+  if (!data.success) {
+    throw new Error(data.errors?.[0]?.message || 'Query D1 gagal dieksekusi');
+  }
+
+  return (data.result?.[0]?.results as T[]) || [];
+}
