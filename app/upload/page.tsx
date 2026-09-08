@@ -59,7 +59,7 @@ export default function UploadChapterPage() {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
       const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
-      // 1. Unggah gambar ke Cloudflare R2
+      // 1. Upload semua file ke Cloudflare R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -75,7 +75,7 @@ export default function UploadChapterPage() {
         });
       }
 
-      // 2. Kirim data ke endpoint baru /api/chapters/create
+      // 2. Simpan metadata ke endpoint /api/chapters/create
       setProgressMsg('Menyimpan data chapter ke database D1...');
 
       const res = await fetch('/api/chapters/create', {
@@ -118,7 +118,7 @@ export default function UploadChapterPage() {
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
       <div className="max-w-3xl mx-auto space-y-6">
         
-        {/* Header Dashboard */}
+        {/* Header Navigasi */}
         <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
           <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
             Upload Chapter Komik
@@ -139,14 +139,14 @@ export default function UploadChapterPage() {
           </div>
         </div>
 
-        {/* Kotak Pesan Progress */}
+        {/* Notifikasi Status */}
         {progressMsg && (
           <div className="p-3.5 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-xl text-sm">
             {progressMsg}
           </div>
         )}
 
-        {/* Form Input Chapter */}
+        {/* Form Upload */}
         <form
           onSubmit={handleUpload}
           className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 space-y-5 shadow-lg"

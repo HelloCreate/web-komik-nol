@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const safeChapterNumber = String(chapterNumber).trim();
     const safeTitle = title ? String(title).trim() : '';
 
-    // 1. Simpan atau perbarui data chapter di D1
+    // 1. Simpan atau update chapter di Cloudflare D1
     await queryD1(
       `INSERT INTO chapters (manga_id, chapter_number, title)
        VALUES (?, ?, ?)
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       [safeMangaId, safeChapterNumber, safeTitle]
     );
 
-    // 2. Dapatkan ID chapter dari D1
+    // 2. Ambil ID chapter dari database D1
     const chapterRows = await queryD1<any>(
       'SELECT id FROM chapters WHERE manga_id = ? AND chapter_number = ? LIMIT 1',
       [safeMangaId, safeChapterNumber]
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     const chapterId = chapterRows[0].id;
 
-    // 3. Simpan data halaman gambar ke tabel chapter_images
+    // 3. Masukkan gambar-gambar halaman ke tabel chapter_images
     if (Array.isArray(images) && images.length > 0) {
       await queryD1('DELETE FROM chapter_images WHERE chapter_id = ?', [chapterId]);
 

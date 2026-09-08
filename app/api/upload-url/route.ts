@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const r2 = new S3Client({
+const s3 = new S3Client({
   region: 'auto',
   endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
@@ -12,29 +13,24 @@ const r2 = new S3Client({
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const folder = (formData.get('folder') as string) || 'chapters';
+    const { filename, contentType } = await req.json();
 
-    if (!file) {
-      return NextResponse.json({ error: 'File tidak ditemukan' }, { status: 400 });
+    if (!filename || !contentType) {
+      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const uniqueKey = `${folder}/${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+    const command = new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: filename,
+      ContentType: contentType,
+    });
 
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME || 'yanama-comic',
-        Key: uniqueKey,
-        Body: buffer,
-        ContentType: file.type,
-      })
-    );
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+    
+    // Gunakan URL internal Vercel agar 100% aman dari blokir/error SSL R2 di laptop
+    const publicUrl = `/api/image?key=${encodeURIComponent(filename)}`;
 
-    const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '')}/${uniqueKey}`;
-    return NextResponse.json({ publicUrl, key: uniqueKey });
+    return NextResponse.json({ uploadUrl, publicUrl });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
