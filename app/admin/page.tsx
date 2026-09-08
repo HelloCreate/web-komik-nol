@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
             id: editId,
             title,
             slug,
-            coverUrl: uploadedCoverUrl || undefined,
+            coverUrl: uploadedCoverUrl || null,
             description,
             genres,
             theme,
@@ -133,16 +133,16 @@ export default function AdminDashboardPage() {
           }),
         });
 
+        const rawText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = { error: rawText };
+        }
+
         if (!res.ok) {
-          let errorMsg = `Server error (${res.status})`;
-          try {
-            const errData = await res.json();
-            if (errData?.error) errorMsg = errData.error;
-          } catch {
-            const text = await res.text();
-            if (text) errorMsg = text;
-          }
-          throw new Error(errorMsg);
+          throw new Error(data.error || `Gagal update (Status: ${res.status})`);
         }
 
         setMsg('Data komik berhasil diperbarui!');
@@ -155,7 +155,7 @@ export default function AdminDashboardPage() {
           body: JSON.stringify({
             title,
             slug,
-            coverUrl: uploadedCoverUrl,
+            coverUrl: uploadedCoverUrl || '',
             description,
             genres,
             theme,
@@ -165,16 +165,16 @@ export default function AdminDashboardPage() {
           }),
         });
 
+        const rawText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = { error: rawText };
+        }
+
         if (!res.ok) {
-          let errorMsg = `Server error (${res.status})`;
-          try {
-            const errData = await res.json();
-            if (errData?.error) errorMsg = errData.error;
-          } catch {
-            const text = await res.text();
-            if (text) errorMsg = text;
-          }
-          throw new Error(errorMsg);
+          throw new Error(data.error || `Gagal simpan (Status: ${res.status})`);
         }
 
         setMsg('Komik baru berhasil ditambahkan!');
@@ -194,7 +194,10 @@ export default function AdminDashboardPage() {
 
     try {
       const res = await fetch(`/api/admin/mangas?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Gagal menghapus komik');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Gagal menghapus komik');
+      }
       if (editId === id) handleCancelEdit();
       fetchMangas();
     } catch (err: any) {
@@ -278,7 +281,7 @@ export default function AdminDashboardPage() {
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Author / Studio</label>
               <input
                 type="text"
-                placeholder="contoh: Chugong, DUBU"
+                placeholder="contoh: Komakari"
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
                 className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
