@@ -38,7 +38,6 @@ export default function UploadChapterPage() {
 
   const handleFilesChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      // Urutkan file berdasarkan nama file agar halaman berurutan (01, 02, ...)
       const fileList = Array.from(e.target.files).sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
       );
@@ -58,9 +57,9 @@ export default function UploadChapterPage() {
 
     try {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
-      const mangaSlug = selectedManga ? selectedManga.slug : 'unknown';
+      const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
-      // 1. Upload seluruh gambar ke Cloudflare R2 secara bertahap
+      // 1. Upload file gambar satu per satu ke Cloudflare R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -76,17 +75,22 @@ export default function UploadChapterPage() {
         });
       }
 
-      // 2. Simpan metadata chapter dan data halaman ke database D1
-      setProgressMsg('Menyimpan informasi chapter ke database D1...');
-      const saveRes = await fetch('/api/chapters', {
+      // 2. Simpan metadata ke /api/chapters/save
+      setProgressMsg('Menyimpan data chapter ke database D1...');
+      const payload = {
+        mangaId: Number(selectedMangaId),
+        chapterNumber: String(chapterNumber).trim(),
+        title: title.trim(),
+        images: uploadedImages,
+      };
+
+      const saveRes = await fetch('/api/chapters/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mangaId: Number(selectedMangaId),
-          chapterNumber: String(chapterNumber).trim(),
-          title: title.trim(),
-          images: uploadedImages,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
       const resText = await saveRes.text();
@@ -116,7 +120,7 @@ export default function UploadChapterPage() {
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
       <div className="max-w-3xl mx-auto space-y-6">
         
-        {/* Header dengan Navigasi ke Panel Admin & Beranda */}
+        {/* Header Navigasi */}
         <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
           <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
             Upload Chapter Komik
@@ -137,19 +141,18 @@ export default function UploadChapterPage() {
           </div>
         </div>
 
-        {/* Notifikasi / Progress Status */}
+        {/* Notifikasi Pesan */}
         {progressMsg && (
           <div className="p-3.5 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-xl text-sm">
             {progressMsg}
           </div>
         )}
 
-        {/* Form Upload Chapter */}
+        {/* Form Upload */}
         <form
           onSubmit={handleUpload}
           className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 space-y-5 shadow-lg"
         >
-          {/* Pilih Komik */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
               Pilih Komik
@@ -170,7 +173,6 @@ export default function UploadChapterPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Nomor Chapter */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
                 Nomor Chapter
@@ -185,7 +187,6 @@ export default function UploadChapterPage() {
               />
             </div>
 
-            {/* Judul Chapter (Opsional) */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
                 Judul Chapter (Opsional)
@@ -200,7 +201,6 @@ export default function UploadChapterPage() {
             </div>
           </div>
 
-          {/* Pilih Gambar Lembar Chapter */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
               Pilih Gambar Halaman (Bisa pilih banyak sekaligus)
@@ -215,12 +215,11 @@ export default function UploadChapterPage() {
             />
             {files.length > 0 && (
               <p className="mt-2 text-xs text-[#baa9a9]/80">
-                Terpilih <strong>{files.length}</strong> halaman yang siap diunggah.
+                Terpilih <strong>{files.length}</strong> berkas halaman.
               </p>
             )}
           </div>
 
-          {/* Tombol Eksekusi Upload */}
           <button
             type="submit"
             disabled={loading}
