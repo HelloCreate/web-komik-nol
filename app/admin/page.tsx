@@ -28,7 +28,7 @@ function formatCoverUrl(url?: string | null): string {
 
 export default function AdminDashboardPage() {
   const [mangas, setMangas] = useState<Manga[]>([]);
-  
+
   // Form State
   const [editId, setEditId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
@@ -41,13 +41,16 @@ export default function AdminDashboardPage() {
   const [demographic, setDemographic] = useState('Shounen');
   const [status, setStatus] = useState('Ongoing');
   const [author, setAuthor] = useState('');
-  
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
   const fetchMangas = async () => {
     try {
       const res = await fetch('/api/admin/mangas');
+      if (!res.ok) {
+        throw new Error('Gagal mengambil daftar komik');
+      }
       const data = await res.json();
       if (Array.isArray(data)) setMangas(data);
     } catch (err: any) {
@@ -67,7 +70,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Masuk ke mode Edit
   const handleSelectEdit = (manga: Manga) => {
     setEditId(manga.id);
     setTitle(manga.title || '');
@@ -84,7 +86,6 @@ export default function AdminDashboardPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Batalkan mode Edit
   const handleCancelEdit = () => {
     setEditId(null);
     setTitle('');
@@ -100,7 +101,6 @@ export default function AdminDashboardPage() {
     setMsg('');
   };
 
-  // Submit Simpan (Tambah / Update)
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -109,14 +109,12 @@ export default function AdminDashboardPage() {
     try {
       let uploadedCoverUrl = '';
 
-      // Upload cover baru jika admin memilih berkas gambar
       if (coverFile) {
         setMsg('Sedang mengunggah cover ke Cloudflare R2...');
         uploadedCoverUrl = await uploadToR2(coverFile, `covers/${slug || Date.now()}`);
       }
 
       if (editId) {
-        // Mode UPDATE (PUT)
         setMsg('Memperbarui keterangan komik di Cloudflare D1...');
         const res = await fetch('/api/admin/mangas', {
           method: 'PUT',
@@ -125,7 +123,7 @@ export default function AdminDashboardPage() {
             id: editId,
             title,
             slug,
-            coverUrl: uploadedCoverUrl || undefined, // undefined jika tidak ganti cover
+            coverUrl: uploadedCoverUrl || undefined,
             description,
             genres,
             theme,
@@ -136,14 +134,20 @@ export default function AdminDashboardPage() {
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Gagal memperbarui komik');
+          let errorMsg = `Server error (${res.status})`;
+          try {
+            const errData = await res.json();
+            if (errData?.error) errorMsg = errData.error;
+          } catch {
+            const text = await res.text();
+            if (text) errorMsg = text;
+          }
+          throw new Error(errorMsg);
         }
 
         setMsg('Data komik berhasil diperbarui!');
         handleCancelEdit();
       } else {
-        // Mode TAMBAH BARU (POST)
         setMsg('Menyimpan komik baru...');
         const res = await fetch('/api/admin/mangas', {
           method: 'POST',
@@ -162,8 +166,15 @@ export default function AdminDashboardPage() {
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Gagal menyimpan komik');
+          let errorMsg = `Server error (${res.status})`;
+          try {
+            const errData = await res.json();
+            if (errData?.error) errorMsg = errData.error;
+          } catch {
+            const text = await res.text();
+            if (text) errorMsg = text;
+          }
+          throw new Error(errorMsg);
         }
 
         setMsg('Komik baru berhasil ditambahkan!');
@@ -274,7 +285,6 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            {/* Input Upload Gambar Cover */}
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">
                 {editId ? 'Ganti Gambar Cover (Opsional)' : 'Pilih Gambar Cover'}
