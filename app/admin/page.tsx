@@ -1,24 +1,18 @@
 'use client';
 
-import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { uploadToR2 } from '@/lib/uploadToR2';
 
 interface Manga {
   id: number;
   title: string;
   slug: string;
+  cover_url?: string;
 }
 
-export default function UploadChapterPage() {
+export default function AdminDashboardPage() {
   const [mangas, setMangas] = useState<Manga[]>([]);
-  const [selectedMangaId, setSelectedMangaId] = useState<string>('');
-  const [chapterNumber, setChapterNumber] = useState<string>('');
-  const [title, setTitle] = useState<string>('');
-  const [files, setFiles] = useState<File[]>([]);
-
-  const [loading, setLoading] = useState<boolean>(false);
-  const [progressMsg, setProgressMsg] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     async function loadMangas() {
@@ -27,205 +21,129 @@ export default function UploadChapterPage() {
         const data = await res.json();
         if (Array.isArray(data)) {
           setMangas(data);
-          if (data.length > 0) setSelectedMangaId(String(data[0].id));
         }
       } catch (err: any) {
         console.error('Gagal mengambil daftar komik:', err.message);
+      } finally {
+        setLoading(false);
       }
     }
     loadMangas();
   }, []);
 
-  const handleFilesChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const fileList = Array.from(e.target.files).sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-      );
-      setFiles(fileList);
-    }
-  };
-
-  const handleUpload = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!selectedMangaId || !chapterNumber || files.length === 0) {
-      alert('Pilih komik, isi nomor chapter, dan pilih setidaknya 1 berkas gambar.');
-      return;
-    }
-
-    setLoading(true);
-    setProgressMsg('Menyiapkan upload chapter...');
-
-    try {
-      const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
-      const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
-
-      // 1. Upload semua file ke Cloudflare R2
-      const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
-
-      for (let i = 0; i < files.length; i++) {
-        setProgressMsg(`Mengunggah gambar ${i + 1} dari ${files.length} ke R2...`);
-        const file = files[i];
-        const imageUrl = await uploadToR2(
-          file,
-          `chapters/${mangaSlug}/ch-${chapterNumber}`
-        );
-        uploadedImages.push({
-          pageNumber: i + 1,
-          imageUrl,
-        });
-      }
-
-      // 2. Simpan metadata ke /api/chapters/save dengan method POST & JSON body
-      setProgressMsg('Menyimpan informasi chapter ke database D1...');
-
-      const res = await fetch('/api/chapters/save', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          mangaId: Number(selectedMangaId),
-          chapterNumber: String(chapterNumber).trim(),
-          title: title.trim(),
-          images: uploadedImages,
-        }),
-      });
-
-      const resText = await res.text();
-      let resJson: any = null;
-      try {
-        resJson = JSON.parse(resText);
-      } catch {
-        resJson = null;
-      }
-
-      if (!res.ok) {
-        throw new Error(resJson?.error || resText || 'Gagal menyimpan chapter');
-      }
-
-      setProgressMsg('Chapter berhasil diunggah dan disimpan!');
-      setChapterNumber('');
-      setTitle('');
-      setFiles([]);
-    } catch (err: any) {
-      setProgressMsg(`Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-8">
         
         {/* Header Dashboard */}
-        <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
-            Upload Chapter Komik
-          </h1>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin"
-              className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] text-sm font-semibold px-4 py-2 rounded-lg transition"
-            >
-              Panel Admin
-            </Link>
+        <div className="flex flex-wrap justify-between items-center border-b border-[#baa9a9]/20 pb-5 gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
+              Dashboard Panel Admin
+            </h1>
+            <p className="text-xs md:text-sm text-[#baa9a9]/80 mt-1">
+              Kelola judul komik dan unggah bab terbaru Yanama Komik
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] text-sm px-4 py-2 rounded-lg border border-[#baa9a9]/30 transition"
+              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] text-xs md:text-sm font-semibold px-4 py-2.5 rounded-xl border border-[#baa9a9]/30 transition shadow"
             >
-              Beranda
+              &larr; Lihat Web Utama
             </Link>
           </div>
         </div>
 
-        {/* Notifikasi Status */}
-        {progressMsg && (
-          <div className="p-3.5 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-xl text-sm">
-            {progressMsg}
-          </div>
-        )}
-
-        {/* Form Upload */}
-        <form
-          onSubmit={handleUpload}
-          className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 space-y-5 shadow-lg"
-        >
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
-              Pilih Komik
-            </label>
-            <select
-              value={selectedMangaId}
-              onChange={(e) => setSelectedMangaId(e.target.value)}
-              required
-              className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
-            >
-              <option value="">- Pilih Komik -</option>
-              {mangas.map((manga) => (
-                <option key={manga.id} value={manga.id}>
-                  {manga.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
-                Nomor Chapter
-              </label>
-              <input
-                type="text"
-                placeholder="Contoh: 1 atau 1.5"
-                value={chapterNumber}
-                onChange={(e) => setChapterNumber(e.target.value)}
-                required
-                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
-                Judul Chapter (Opsional)
-              </label>
-              <input
-                type="text"
-                placeholder="Awal Mula..."
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
-              Pilih Gambar Halaman (Bisa pilih banyak sekaligus)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFilesChange}
-              required
-              className="w-full text-xs text-[#baa9a9] file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#baa9a9] file:text-[#453a3a] hover:file:bg-[#a89595] bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 cursor-pointer focus:outline-none"
-            />
-            {files.length > 0 && (
-              <p className="mt-2 text-xs text-[#baa9a9]/80">
-                Terpilih <strong>{files.length}</strong> berkas halaman.
-              </p>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] font-bold py-3 rounded-xl transition shadow"
+        {/* Menu Aksi Cepat */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <Link
+            href="/upload"
+            className="group bg-[#362d2d] hover:bg-[#2e2626] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg transition flex items-center justify-between"
           >
-            {loading ? 'Sedang Memproses Upload...' : 'Mulai Unggah ke Cloudflare R2'}
-          </button>
-        </form>
+            <div>
+              <h2 className="text-lg font-bold text-[#f2ecec] group-hover:text-white transition">
+                + Upload Chapter Komik
+              </h2>
+              <p className="text-xs text-[#baa9a9]/80 mt-1">
+                Unggah gambar halaman dan buat bab baru ke Cloudflare R2
+              </p>
+            </div>
+            <span className="bg-[#baa9a9] text-[#453a3a] font-bold text-xs px-3.5 py-2 rounded-lg group-hover:bg-[#cfc1c1] transition">
+              Buka Form
+            </span>
+          </Link>
+
+          <div className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#f2ecec]">
+                Total Komik Terdaftar
+              </h2>
+              <p className="text-xs text-[#baa9a9]/80 mt-1">
+                Jumlah judul komik aktif dalam database
+              </p>
+            </div>
+            <span className="text-2xl font-black text-[#f2ecec] bg-[#2a2323] px-4 py-2 rounded-xl border border-[#baa9a9]/30">
+              {mangas.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Daftar Komik yang Ada */}
+        <div className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg space-y-4">
+          <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-3">
+            <h3 className="text-base font-bold text-[#f2ecec]">
+              Daftar Komik
+            </h3>
+            <span className="text-xs text-[#baa9a9]/70">
+              {mangas.length} Judul
+            </span>
+          </div>
+
+          {loading ? (
+            <p className="py-8 text-center text-xs text-[#baa9a9]/70 animate-pulse">
+              Memuat data komik...
+            </p>
+          ) : mangas.length > 0 ? (
+            <div className="divide-y divide-[#baa9a9]/10">
+              {mangas.map((manga) => (
+                <div
+                  key={manga.id}
+                  className="py-3.5 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <h4 className="font-semibold text-sm text-[#f2ecec]">
+                      {manga.title}
+                    </h4>
+                    <p className="text-xs text-[#baa9a9]/60">
+                      Slug: /{manga.slug}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/manga/${manga.slug}`}
+                      className="text-xs bg-[#2a2323] hover:bg-[#201a1a] text-[#baa9a9] hover:text-[#f2ecec] px-3 py-1.5 rounded-lg border border-[#baa9a9]/30 transition"
+                    >
+                      Lihat
+                    </Link>
+                    <Link
+                      href="/upload"
+                      className="text-xs bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      + Chapter
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-xs text-[#baa9a9]/60">
+              Belum ada komik yang dibuat di database.
+            </p>
+          )}
+        </div>
 
       </div>
     </div>
