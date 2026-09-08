@@ -47,7 +47,7 @@ export default function AdminDashboardPage() {
 
   const fetchMangas = async () => {
     try {
-      const res = await fetch('/api/admin/mangas');
+      const res = await fetch('/api/admin/mangas', { cache: 'no-store' });
       if (!res.ok) {
         throw new Error('Gagal mengambil daftar komik');
       }
@@ -114,73 +114,40 @@ export default function AdminDashboardPage() {
         uploadedCoverUrl = await uploadToR2(coverFile, `covers/${slug || Date.now()}`);
       }
 
-      if (editId) {
-        setMsg('Memperbarui keterangan komik di Cloudflare D1...');
-        const res = await fetch('/api/admin/mangas', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: editId,
-            title,
-            slug,
-            coverUrl: uploadedCoverUrl || null,
-            description,
-            genres,
-            theme,
-            demographic,
-            status,
-            author,
-          }),
-        });
+      setMsg(editId ? 'Menyimpan perubahan komik...' : 'Menyimpan komik baru...');
 
-        const rawText = await res.text();
-        let data: any = {};
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          data = { error: rawText };
-        }
+      // Gunakan method POST untuk kedua mode (Create maupun Edit)
+      const res = await fetch('/api/admin/mangas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editId || undefined,
+          title,
+          slug,
+          coverUrl: uploadedCoverUrl || (editId ? null : ''),
+          description,
+          genres,
+          theme,
+          demographic,
+          status,
+          author,
+        }),
+      });
 
-        if (!res.ok) {
-          throw new Error(data.error || `Gagal update (Status: ${res.status})`);
-        }
-
-        setMsg('Data komik berhasil diperbarui!');
-        handleCancelEdit();
-      } else {
-        setMsg('Menyimpan komik baru...');
-        const res = await fetch('/api/admin/mangas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title,
-            slug,
-            coverUrl: uploadedCoverUrl || '',
-            description,
-            genres,
-            theme,
-            demographic,
-            status,
-            author,
-          }),
-        });
-
-        const rawText = await res.text();
-        let data: any = {};
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          data = { error: rawText };
-        }
-
-        if (!res.ok) {
-          throw new Error(data.error || `Gagal simpan (Status: ${res.status})`);
-        }
-
-        setMsg('Komik baru berhasil ditambahkan!');
-        handleCancelEdit();
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { error: rawText };
       }
 
+      if (!res.ok) {
+        throw new Error(data.error || `Error ${res.status}: Gagal memproses data`);
+      }
+
+      setMsg(editId ? 'Data komik berhasil diperbarui!' : 'Komik baru berhasil ditambahkan!');
+      handleCancelEdit();
       fetchMangas();
     } catch (err: any) {
       setMsg(`Error: ${err.message}`);
