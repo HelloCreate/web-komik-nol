@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const safeChapterNumber = String(chapterNumber).trim();
     const safeTitle = title ? String(title).trim() : '';
 
-    // 1. Cek apakah chapter sudah ada
+    // 1. Cek apakah chapter sudah terdaftar
     const existing = await queryD1<any>(
       'SELECT id FROM chapters WHERE manga_id = ? AND chapter_number = ? LIMIT 1',
       [safeMangaId, safeChapterNumber]
@@ -45,13 +45,13 @@ export async function POST(req: Request) {
       );
 
       if (!created || created.length === 0) {
-        throw new Error('Gagal mengambil ID chapter yang baru disimpan');
+        throw new Error('Gagal mendapatkan ID chapter baru');
       }
 
       chapterId = created[0].id;
     }
 
-    // 2. Simpan halaman gambar
+    // 2. Simpan daftar gambar lembaran chapter
     if (Array.isArray(images) && images.length > 0) {
       await queryD1('DELETE FROM chapter_images WHERE chapter_id = ?', [chapterId]);
 
