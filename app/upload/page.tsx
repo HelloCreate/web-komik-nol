@@ -59,7 +59,7 @@ export default function UploadChapterPage() {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
       const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
-      // 1. Upload semua file ke Cloudflare R2
+      // 1. Unggah gambar ke Cloudflare R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -75,10 +75,10 @@ export default function UploadChapterPage() {
         });
       }
 
-      // 2. Simpan metadata ke endpoint /api/chapters/create
+      // 2. Simpan metadata ke /api/chapters
       setProgressMsg('Menyimpan data chapter ke database D1...');
 
-      const res = await fetch('/api/chapters/create', {
+      const res = await fetch('/api/chapters', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
