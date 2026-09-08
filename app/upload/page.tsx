@@ -30,7 +30,7 @@ export default function UploadChapterPage() {
           if (data.length > 0) setSelectedMangaId(String(data[0].id));
         }
       } catch (err: any) {
-        console.error('Gagal memuat komik:', err.message);
+        console.error('Gagal mengambil daftar komik:', err.message);
       }
     }
     loadMangas();
@@ -59,10 +59,11 @@ export default function UploadChapterPage() {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
       const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
+      // 1. Upload semua file ke Cloudflare R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
-        setProgressMsg(`Mengunggah gambar ${i + 1} dari ${files.length} ke R2...`);
+        setProgressMsg(`Mengunggah gambar ${i + 1} dari ${files.length} ke Cloudflare R2...`);
         const file = files[i];
         const imageUrl = await uploadToR2(
           file,
@@ -74,9 +75,9 @@ export default function UploadChapterPage() {
         });
       }
 
+      // 2. Simpan metadata ke /api/chapters
       setProgressMsg('Menyimpan data chapter ke database D1...');
 
-      // MEMANGGIL /api/chapters SECARA EKSPLISIT
       const res = await fetch('/api/chapters', {
         method: 'POST',
         headers: {
@@ -114,37 +115,41 @@ export default function UploadChapterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
+    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10 relative">
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
+        
+        {/* Header Navigasi - Z-Index Tinggi & Pointer Events Auto */}
+        <div className="relative z-50 flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
           <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
             Upload Chapter Komik
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               href="/admin"
-              className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] text-sm font-semibold px-4 py-2 rounded-lg transition"
+              className="inline-flex items-center justify-center bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] active:scale-95 text-xs md:text-sm font-bold px-4 py-2 rounded-lg cursor-pointer transition shadow-md pointer-events-auto"
             >
               Panel Admin
             </Link>
             <Link
               href="/"
-              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] text-sm px-4 py-2 rounded-lg border border-[#baa9a9]/30 transition"
+              className="inline-flex items-center justify-center bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] active:scale-95 text-xs md:text-sm font-semibold px-4 py-2 rounded-lg border border-[#baa9a9]/30 cursor-pointer transition pointer-events-auto"
             >
               Beranda
             </Link>
           </div>
         </div>
 
+        {/* Notifikasi Status */}
         {progressMsg && (
           <div className="p-3.5 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-xl text-sm">
             {progressMsg}
           </div>
         )}
 
+        {/* Form Upload */}
         <form
           onSubmit={handleUpload}
-          className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 space-y-5 shadow-lg"
+          className="relative z-10 bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 space-y-5 shadow-lg"
         >
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-[#baa9a9]">
@@ -216,11 +221,12 @@ export default function UploadChapterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] font-bold py-3 rounded-xl transition shadow"
+            className="w-full bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] font-bold py-3 rounded-xl transition shadow cursor-pointer"
           >
             {loading ? 'Sedang Memproses Upload...' : 'Mulai Unggah ke Cloudflare R2'}
           </button>
         </form>
+
       </div>
     </div>
   );
