@@ -9,14 +9,24 @@ interface Manga {
   slug: string;
   cover_url?: string;
   description?: string;
+  genres?: string;
+  theme?: string;
+  demographic?: string;
+  status?: string;
+  author?: string;
 }
 
-export default function AdminPage() {
+export default function AdminDashboardPage() {
   const [mangas, setMangas] = useState<Manga[]>([]);
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
   const [description, setDescription] = useState('');
+  const [genres, setGenres] = useState('');
+  const [theme, setTheme] = useState('');
+  const [demographic, setDemographic] = useState('Shounen');
+  const [status, setStatus] = useState('Ongoing');
+  const [author, setAuthor] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -43,12 +53,22 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/mangas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, slug, coverUrl, description }),
+        body: JSON.stringify({
+          title,
+          slug,
+          coverUrl,
+          description,
+          genres,
+          theme,
+          demographic,
+          status,
+          author,
+        }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Gagal menambahkan komik');
+        throw new Error(err.error || 'Gagal menyimpan komik');
       }
 
       setMsg('Komik berhasil ditambahkan!');
@@ -56,6 +76,9 @@ export default function AdminPage() {
       setSlug('');
       setCoverUrl('');
       setDescription('');
+      setGenres('');
+      setTheme('');
+      setAuthor('');
       fetchMangas();
     } catch (err: any) {
       setMsg(`Error: ${err.message}`);
@@ -77,100 +100,185 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-8">
+    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
       <div className="max-w-4xl mx-auto space-y-8">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        
+        {/* Header Dashboard */}
+        <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">Admin Dashboard</h1>
           <div className="space-x-3">
-            <Link href="/upload" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded">
+            <Link
+              href="/upload"
+              className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] text-sm font-semibold px-4 py-2 rounded-lg transition"
+            >
               Upload Chapter
             </Link>
-            <Link href="/" className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded">
+            <Link
+              href="/"
+              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] text-sm px-4 py-2 rounded-lg border border-[#baa9a9]/30 transition"
+            >
               Beranda
             </Link>
           </div>
         </div>
 
         {msg && (
-          <div className="p-3 bg-blue-500/20 border border-blue-500 rounded text-blue-200">
+          <div className="p-3 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-lg text-sm">
             {msg}
           </div>
         )}
 
-        {/* Form Tambah Manga */}
-        <form onSubmit={handleCreateManga} className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
-          <h2 className="text-xl font-bold">Tambah Komik Baru</h2>
-          <div className="grid grid-cols-2 gap-4">
+        {/* Form Tambah Komik */}
+        <form onSubmit={handleCreateManga} className="bg-[#362d2d] p-6 rounded-xl border border-[#baa9a9]/20 space-y-5">
+          <h2 className="text-xl font-bold text-[#f2ecec]">Tambah Komik Baru</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm mb-1">Judul Komik</label>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Judul Komik</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
               />
             </div>
+
             <div>
-              <label className="block text-sm mb-1">Slug URL (unik)</label>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Slug URL (unik)</label>
               <input
                 type="text"
-                placeholder="contoh: naruto-shippuden"
+                placeholder="contoh: solo-leveling"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 required
-                className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm mb-1">Cover URL (Cloudflare R2)</label>
-            <input
-              type="text"
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
-            />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Author / Studio</label>
+              <input
+                type="text"
+                placeholder="contoh: Chugong, DUBU"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Cover URL (R2)</label>
+              <input
+                type="text"
+                placeholder="https://pub-xxxx.r2.dev/covers/title.jpg"
+                value={coverUrl}
+                onChange={(e) => setCoverUrl(e.target.value)}
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+              />
+            </div>
           </div>
+
+          {/* Baris Kategori: Genre, Theme, Demographic, Status */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Genre</label>
+              <input
+                type="text"
+                placeholder="Action, Fantasy, Adventure"
+                value={genres}
+                onChange={(e) => setGenres(e.target.value)}
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Theme</label>
+              <input
+                type="text"
+                placeholder="Isekai, Reincarnation, Magic"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Demographic</label>
+              <select
+                value={demographic}
+                onChange={(e) => setDemographic(e.target.value)}
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+              >
+                <option value="Shounen">Shounen</option>
+                <option value="Seinen">Seinen</option>
+                <option value="Shoujo">Shoujo</option>
+                <option value="Josei">Josei</option>
+                <option value="General">General / All Ages</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+              >
+                <option value="Ongoing">Ongoing</option>
+                <option value="Completed">Completed</option>
+                <option value="Hiatus">Hiatus</option>
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-sm mb-1">Deskripsi</label>
+            <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Deskripsi</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full bg-slate-900 border border-slate-700 rounded p-2.5"
+              className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
             />
           </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-500 px-6 py-2.5 rounded font-medium"
+            className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] font-bold px-6 py-2.5 rounded-lg transition"
           >
             {loading ? 'Menyimpan...' : 'Simpan Komik'}
           </button>
         </form>
 
-        {/* Daftar Manga */}
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
-          <h2 className="text-xl font-bold mb-4">Daftar Komik Terdaftar</h2>
-          <div className="divide-y divide-slate-700">
+        {/* List Komik Terdaftar */}
+        <div className="bg-[#362d2d] p-6 rounded-xl border border-[#baa9a9]/20">
+          <h2 className="text-xl font-bold text-[#f2ecec] mb-4">Daftar Komik Terdaftar</h2>
+          <div className="divide-y divide-[#baa9a9]/10">
             {mangas.map((manga) => (
               <div key={manga.id} className="py-3 flex justify-between items-center">
                 <div>
-                  <p className="font-semibold">{manga.title}</p>
-                  <p className="text-xs text-slate-400">/{manga.slug}</p>
+                  <p className="font-semibold text-[#f2ecec]">{manga.title}</p>
+                  <div className="flex gap-2 text-xs text-[#baa9a9]/70 mt-1">
+                    {manga.demographic && <span className="bg-[#2a2323] px-2 py-0.5 rounded">{manga.demographic}</span>}
+                    {manga.status && <span className="bg-[#2a2323] px-2 py-0.5 rounded">{manga.status}</span>}
+                    {manga.genres && <span>{manga.genres}</span>}
+                  </div>
                 </div>
                 <button
                   onClick={() => handleDeleteManga(manga.id)}
-                  className="text-red-400 hover:text-red-300 text-sm"
+                  className="text-red-400 hover:text-red-300 text-sm font-medium"
                 >
                   Hapus
                 </button>
               </div>
             ))}
-            {mangas.length === 0 && <p className="text-slate-400 text-sm">Belum ada komik.</p>}
+            {mangas.length === 0 && <p className="text-[#baa9a9]/60 text-sm">Belum ada komik.</p>}
           </div>
         </div>
+
       </div>
     </div>
   );
