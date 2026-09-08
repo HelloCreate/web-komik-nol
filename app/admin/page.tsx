@@ -17,8 +17,20 @@ interface Manga {
   author?: string;
 }
 
+function formatCoverUrl(url?: string | null): string {
+  if (!url) return '';
+  if (url.includes('.r2.dev/')) {
+    const key = url.split('.r2.dev/')[1];
+    return `/api/image?key=${encodeURIComponent(key)}`;
+  }
+  return url;
+}
+
 export default function AdminDashboardPage() {
   const [mangas, setMangas] = useState<Manga[]>([]);
+  
+  // Form State
+  const [editId, setEditId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -29,6 +41,7 @@ export default function AdminDashboardPage() {
   const [demographic, setDemographic] = useState('Shounen');
   const [status, setStatus] = useState('Ongoing');
   const [author, setAuthor] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -46,7 +59,6 @@ export default function AdminDashboardPage() {
     fetchMangas();
   }, []);
 
-  // Handler saat memilih file cover dari galeri / komputer
   const handleCoverChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -55,7 +67,41 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleCreateManga = async (e: FormEvent) => {
+  // Masuk ke mode Edit
+  const handleSelectEdit = (manga: Manga) => {
+    setEditId(manga.id);
+    setTitle(manga.title || '');
+    setSlug(manga.slug || '');
+    setDescription(manga.description || '');
+    setGenres(manga.genres || '');
+    setTheme(manga.theme || '');
+    setDemographic(manga.demographic || 'Shounen');
+    setStatus(manga.status || 'Ongoing');
+    setAuthor(manga.author || '');
+    setCoverFile(null);
+    setCoverPreview(formatCoverUrl(manga.cover_url));
+    setMsg('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Batalkan mode Edit
+  const handleCancelEdit = () => {
+    setEditId(null);
+    setTitle('');
+    setSlug('');
+    setCoverFile(null);
+    setCoverPreview('');
+    setDescription('');
+    setGenres('');
+    setTheme('');
+    setAuthor('');
+    setDemographic('Shounen');
+    setStatus('Ongoing');
+    setMsg('');
+  };
+
+  // Submit Simpan (Tambah / Update)
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMsg('');
@@ -63,45 +109,67 @@ export default function AdminDashboardPage() {
     try {
       let uploadedCoverUrl = '';
 
-      // 1. Upload cover langsung ke Cloudflare R2 jika ada file yang dipilih
+      // Upload cover baru jika admin memilih berkas gambar
       if (coverFile) {
         setMsg('Sedang mengunggah cover ke Cloudflare R2...');
         uploadedCoverUrl = await uploadToR2(coverFile, `covers/${slug || Date.now()}`);
       }
 
-      setMsg('Menyimpan data komik ke Cloudflare D1...');
+      if (editId) {
+        // Mode UPDATE (PUT)
+        setMsg('Memperbarui keterangan komik di Cloudflare D1...');
+        const res = await fetch('/api/admin/mangas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editId,
+            title,
+            slug,
+            coverUrl: uploadedCoverUrl || undefined, // undefined jika tidak ganti cover
+            description,
+            genres,
+            theme,
+            demographic,
+            status,
+            author,
+          }),
+        });
 
-      // 2. Simpan seluruh data komik ke D1
-      const res = await fetch('/api/admin/mangas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          slug,
-          coverUrl: uploadedCoverUrl,
-          description,
-          genres,
-          theme,
-          demographic,
-          status,
-          author,
-        }),
-      });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Gagal memperbarui komik');
+        }
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Gagal menyimpan komik');
+        setMsg('Data komik berhasil diperbarui!');
+        handleCancelEdit();
+      } else {
+        // Mode TAMBAH BARU (POST)
+        setMsg('Menyimpan komik baru...');
+        const res = await fetch('/api/admin/mangas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            slug,
+            coverUrl: uploadedCoverUrl,
+            description,
+            genres,
+            theme,
+            demographic,
+            status,
+            author,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Gagal menyimpan komik');
+        }
+
+        setMsg('Komik baru berhasil ditambahkan!');
+        handleCancelEdit();
       }
 
-      setMsg('Komik dan Cover berhasil ditambahkan!');
-      setTitle('');
-      setSlug('');
-      setCoverFile(null);
-      setCoverPreview('');
-      setDescription('');
-      setGenres('');
-      setTheme('');
-      setAuthor('');
       fetchMangas();
     } catch (err: any) {
       setMsg(`Error: ${err.message}`);
@@ -111,11 +179,12 @@ export default function AdminDashboardPage() {
   };
 
   const handleDeleteManga = async (id: number) => {
-    if (!confirm('Yakin ingin menghapus komik ini?')) return;
+    if (!confirm('Yakin ingin menghapus komik ini beserta seluruh chapternya?')) return;
 
     try {
       const res = await fetch(`/api/admin/mangas?id=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Gagal menghapus komik');
+      if (editId === id) handleCancelEdit();
       fetchMangas();
     } catch (err: any) {
       alert(err.message);
@@ -151,9 +220,22 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Form Tambah Komik */}
-        <form onSubmit={handleCreateManga} className="bg-[#362d2d] p-6 rounded-xl border border-[#baa9a9]/20 space-y-5">
-          <h2 className="text-xl font-bold text-[#f2ecec]">Tambah Komik Baru</h2>
+        {/* Form Tambah / Edit Komik */}
+        <form onSubmit={handleSubmit} className="bg-[#362d2d] p-6 rounded-xl border border-[#baa9a9]/20 space-y-5">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-[#f2ecec]">
+              {editId ? 'Edit Keterangan Komik' : 'Tambah Komik Baru'}
+            </h2>
+            {editId && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="text-xs bg-[#2a2323] hover:bg-[#221c1c] text-[#baa9a9] px-3 py-1.5 rounded-lg border border-[#baa9a9]/30 transition"
+              >
+                Batal Edit
+              </button>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -194,7 +276,9 @@ export default function AdminDashboardPage() {
 
             {/* Input Upload Gambar Cover */}
             <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Pilih Gambar Cover</label>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">
+                {editId ? 'Ganti Gambar Cover (Opsional)' : 'Pilih Gambar Cover'}
+              </label>
               <input
                 type="file"
                 accept="image/*"
@@ -208,19 +292,20 @@ export default function AdminDashboardPage() {
                     alt="Preview Cover"
                     className="w-12 h-16 object-cover rounded border border-[#baa9a9]/40"
                   />
-                  <span className="text-xs text-[#baa9a9]/70 truncate">{coverFile?.name}</span>
+                  <span className="text-xs text-[#baa9a9]/70 truncate">
+                    {coverFile ? coverFile.name : '(Cover saat ini)'}
+                  </span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Baris Kategori: Genre, Theme, Demographic, Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Genre</label>
               <input
                 type="text"
-                placeholder="Action, Fantasy, Adventure"
+                placeholder="Action, Fantasy"
                 value={genres}
                 onChange={(e) => setGenres(e.target.value)}
                 className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
@@ -231,7 +316,7 @@ export default function AdminDashboardPage() {
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Theme</label>
               <input
                 type="text"
-                placeholder="Isekai, Reincarnation, Magic"
+                placeholder="Isekai, Magic"
                 value={theme}
                 onChange={(e) => setTheme(e.target.value)}
                 className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
@@ -272,51 +357,78 @@ export default function AdminDashboardPage() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
+              rows={4}
               className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] font-bold px-6 py-2.5 rounded-lg transition"
-          >
-            {loading ? 'Mengunggah & Menyimpan...' : 'Simpan Komik'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] font-bold px-6 py-2.5 rounded-lg transition shadow"
+            >
+              {loading ? 'Memproses...' : editId ? 'Simpan Perubahan' : 'Simpan Komik'}
+            </button>
+            {editId && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="text-xs text-[#baa9a9] hover:text-[#f2ecec] px-4 py-2 transition"
+              >
+                Batal
+              </button>
+            )}
+          </div>
         </form>
 
         {/* List Komik Terdaftar */}
         <div className="bg-[#362d2d] p-6 rounded-xl border border-[#baa9a9]/20">
           <h2 className="text-xl font-bold text-[#f2ecec] mb-4">Daftar Komik Terdaftar</h2>
           <div className="divide-y divide-[#baa9a9]/10">
-            {mangas.map((manga) => (
-              <div key={manga.id} className="py-3 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  {manga.cover_url && (
-                    <img
-                      src={manga.cover_url}
-                      alt={manga.title}
-                      className="w-10 h-14 object-cover rounded border border-[#baa9a9]/20"
-                    />
-                  )}
-                  <div>
-                    <p className="font-semibold text-[#f2ecec]">{manga.title}</p>
-                    <div className="flex flex-wrap gap-2 text-xs text-[#baa9a9]/70 mt-1">
-                      {manga.demographic && <span className="bg-[#2a2323] px-2 py-0.5 rounded">{manga.demographic}</span>}
-                      {manga.status && <span className="bg-[#2a2323] px-2 py-0.5 rounded">{manga.status}</span>}
-                      {manga.genres && <span>{manga.genres}</span>}
+            {mangas.map((manga) => {
+              const coverSrc = formatCoverUrl(manga.cover_url);
+              return (
+                <div key={manga.id} className="py-4 flex justify-between items-center gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-16 bg-[#2a2323] rounded flex-shrink-0 overflow-hidden border border-[#baa9a9]/20 flex items-center justify-center">
+                      {coverSrc ? (
+                        <img
+                          src={coverSrc}
+                          alt={manga.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-[#baa9a9]/40">No Cover</span>
+                      )}
+                    </div>
+                    <div className="truncate">
+                      <p className="font-semibold text-[#f2ecec] truncate">{manga.title}</p>
+                      <div className="flex flex-wrap gap-2 text-xs text-[#baa9a9]/70 mt-1">
+                        {manga.status && <span className="bg-[#2a2323] px-2 py-0.5 rounded">{manga.status}</span>}
+                        {manga.demographic && <span className="bg-[#2a2323] px-2 py-0.5 rounded">{manga.demographic}</span>}
+                        {manga.genres && <span className="truncate max-w-[200px]">{manga.genres}</span>}
+                      </div>
                     </div>
                   </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleSelectEdit(manga)}
+                      className="bg-[#2a2323] hover:bg-[#221c1c] text-[#baa9a9] hover:text-[#f2ecec] text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#baa9a9]/30 transition"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteManga(manga.id)}
+                      className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1.5 transition"
+                    >
+                      Hapus
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleDeleteManga(manga.id)}
-                  className="text-red-400 hover:text-red-300 text-sm font-medium ml-4"
-                >
-                  Hapus
-                </button>
-              </div>
-            ))}
+              );
+            })}
             {mangas.length === 0 && <p className="text-[#baa9a9]/60 text-sm">Belum ada komik.</p>}
           </div>
         </div>
