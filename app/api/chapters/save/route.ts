@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const safeChapterNumber = String(chapterNumber).trim();
     const safeTitle = title ? String(title).trim() : '';
 
-    // 1. Simpan atau perbarui entri chapter di tabel chapters
+    // 1. Simpan atau perbarui entri chapter
     await queryD1(
       `INSERT INTO chapters (manga_id, chapter_number, title)
        VALUES (?, ?, ?)
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       [safeMangaId, safeChapterNumber, safeTitle]
     );
 
-    // 2. Ambil ID dari chapter yang baru dibuat/diperbarui
+    // 2. Ambil ID chapter
     const chapterRows = await queryD1<any>(
       'SELECT id FROM chapters WHERE manga_id = ? AND chapter_number = ? LIMIT 1',
       [safeMangaId, safeChapterNumber]
@@ -40,9 +40,8 @@ export async function POST(req: Request) {
 
     const chapterId = chapterRows[0].id;
 
-    // 3. Simpan daftar gambar halaman ke tabel chapter_images
+    // 3. Simpan data halaman chapter
     if (Array.isArray(images) && images.length > 0) {
-      // Hapus data halaman lama jika chapter ini di-upload ulang
       await queryD1('DELETE FROM chapter_images WHERE chapter_id = ?', [chapterId]);
 
       for (const img of images) {
@@ -56,9 +55,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, chapterId });
   } catch (error: any) {
-    console.error('Error simpan chapter:', error);
+    console.error('Save chapter error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Gagal menyimpan chapter ke database D1' },
+      { error: error?.message || 'Gagal menyimpan chapter ke D1' },
       { status: 500 }
     );
   }
