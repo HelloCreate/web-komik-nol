@@ -30,7 +30,7 @@ export default function UploadChapterPage() {
           if (data.length > 0) setSelectedMangaId(String(data[0].id));
         }
       } catch (err: any) {
-        console.error('Gagal mengambil daftar komik:', err.message);
+        console.error('Gagal memuat komik:', err.message);
       }
     }
     loadMangas();
@@ -59,7 +59,7 @@ export default function UploadChapterPage() {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
       const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
-      // 1. Upload semua file ke Cloudflare R2
+      // 1. Upload file gambar ke R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -75,10 +75,10 @@ export default function UploadChapterPage() {
         });
       }
 
-      // 2. Simpan metadata ke /api/chapters (ditambah timestamp anti-cache)
+      // 2. Kirim payload JSON ke /api/chapters
       setProgressMsg('Menyimpan data chapter ke database D1...');
 
-      const res = await fetch(`/api/chapters?t=${Date.now()}`, {
+      const res = await fetch('/api/chapters', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ export default function UploadChapterPage() {
           </div>
         </div>
 
-        {/* Notifikasi Status */}
+        {/* Status Pesan */}
         {progressMsg && (
           <div className="p-3.5 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-xl text-sm">
             {progressMsg}
