@@ -48,9 +48,7 @@ export default function AdminDashboardPage() {
   const fetchMangas = async () => {
     try {
       const res = await fetch('/api/admin/mangas', { cache: 'no-store' });
-      if (!res.ok) {
-        throw new Error('Gagal mengambil daftar komik');
-      }
+      if (!res.ok) throw new Error('Gagal mengambil daftar komik');
       const data = await res.json();
       if (Array.isArray(data)) setMangas(data);
     } catch (err: any) {
@@ -116,30 +114,21 @@ export default function AdminDashboardPage() {
 
       setMsg(editId ? 'Menyimpan perubahan komik...' : 'Menyimpan komik baru...');
 
-      const payload: any = {
-        title,
-        slug,
-        description,
-        genres,
-        theme,
-        demographic,
-        status,
-        author,
-      };
-
-      if (editId) {
-        payload.id = editId;
-        if (uploadedCoverUrl) {
-          payload.coverUrl = uploadedCoverUrl;
-        }
-      } else {
-        payload.coverUrl = uploadedCoverUrl || '';
-      }
-
       const res = await fetch('/api/admin/mangas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          id: editId,
+          title,
+          slug,
+          coverUrl: uploadedCoverUrl || undefined,
+          description,
+          genres,
+          theme,
+          demographic,
+          status,
+          author,
+        }),
       });
 
       const resText = await res.text();
@@ -151,7 +140,7 @@ export default function AdminDashboardPage() {
       }
 
       if (!res.ok) {
-        throw new Error(resJson?.error || resText || `Error status ${res.status}`);
+        throw new Error(resJson?.error || resText || `Error ${res.status}`);
       }
 
       setMsg(editId ? 'Data komik berhasil diperbarui!' : 'Komik baru berhasil ditambahkan!');
