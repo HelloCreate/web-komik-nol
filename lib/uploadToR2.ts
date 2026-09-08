@@ -1,28 +1,29 @@
 export async function uploadToR2(file: File, folder: string = 'uploads'): Promise<string> {
-  const fileName = `${folder}/${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+  const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileKey = `${folder}/${Date.now()}-${cleanFileName}`;
 
-  // 1. Ambil Presigned Upload URL dari API
+  // 1. Ambil Presigned URL untuk upload
   const res = await fetch('/api/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      filename: fileName,
-      contentType: file.type,
+      filename: fileKey,
+      contentType: file.type || 'image/jpeg',
     }),
   });
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.error || 'Gagal mendapatkan upload URL');
+    throw new Error(errorData.error || 'Gagal menyiapkan URL unggahan');
   }
 
   const { uploadUrl } = await res.json();
 
-  // 2. Upload biner file langsung ke Cloudflare R2
+  // 2. Upload file langsung ke Cloudflare R2
   const uploadRes = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
-      'Content-Type': file.type,
+      'Content-Type': file.type || 'image/jpeg',
     },
     body: file,
   });
@@ -31,7 +32,6 @@ export async function uploadToR2(file: File, folder: string = 'uploads'): Promis
     throw new Error('Gagal mengunggah file ke Cloudflare R2');
   }
 
-  // 3. Kembalikan URL publik gambar
-  const publicBaseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/+$/, '');
-  return `${publicBaseUrl}/${fileName}`;
+  // 3. Kembalikan URL proxy internal agar bebas error SSL di semua perangkat
+  return `/api/image?key=${encodeURIComponent(fileKey)}`;
 }
