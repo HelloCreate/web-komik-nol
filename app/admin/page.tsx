@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import Link from 'next/link';
+import { uploadToR2 } from '@/lib/uploadToR2';
 
 interface Manga {
   id: number;
   title: string;
   slug: string;
+  cover_url?: string;
   description?: string;
   status?: string;
   author?: string;
@@ -19,7 +21,21 @@ export default function AdminDashboardPage() {
   const [mangas, setMangas] = useState<Manga[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // State Modal Edit
+  // State Modal Tambah Komik Baru
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newSlug, setNewSlug] = useState('');
+  const [newStatus, setNewStatus] = useState('Ongoing');
+  const [newAuthor, setNewAuthor] = useState('');
+  const [newGenre, setNewGenre] = useState('');
+  const [newTheme, setNewTheme] = useState('');
+  const [newDemographic, setNewDemographic] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createMsg, setCreateMsg] = useState('');
+
+  // State Modal Edit Komik
   const [editingManga, setEditingManga] = useState<Manga | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editSlug, setEditSlug] = useState('');
@@ -29,7 +45,6 @@ export default function AdminDashboardPage() {
   const [editTheme, setEditTheme] = useState('');
   const [editDemographic, setEditDemographic] = useState('');
   const [editDescription, setEditDescription] = useState('');
-
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -51,6 +66,78 @@ export default function AdminDashboardPage() {
     fetchMangas();
   }, []);
 
+  // Helper generate slug otomatis saat ketik judul komik baru
+  const handleTitleChange = (val: string) => {
+    setNewTitle(val);
+    const generated = val
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-');
+    setNewSlug(generated);
+  };
+
+  // Submit Buat Komik Baru
+  const handleCreateManga = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newSlug.trim()) {
+      alert('Judul dan Slug wajib diisi!');
+      return;
+    }
+
+    setCreating(true);
+    setCreateMsg('Menyimpan data komik baru...');
+
+    try {
+      let coverUrl = '';
+      if (coverFile) {
+        setCreateMsg('Mengunggah cover komik ke Cloudflare R2...');
+        coverUrl = await uploadToR2(coverFile, `covers/${newSlug}`);
+      }
+
+      setCreateMsg('Menyimpan ke Cloudflare D1...');
+      const res = await fetch('/api/admin/mangas/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTitle,
+          slug: newSlug,
+          cover_url: coverUrl,
+          status: newStatus,
+          author: newAuthor,
+          genre: newGenre,
+          theme: newTheme,
+          demographic: newDemographic,
+          description: newDescription,
+        }),
+      });
+
+      const resData = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(resData?.error || 'Gagal menambahkan komik');
+      }
+
+      setCreateMsg('Komik baru berhasil ditambahkan!');
+      setTimeout(() => {
+        setIsAddOpen(false);
+        setNewTitle('');
+        setNewSlug('');
+        setNewAuthor('');
+        setNewGenre('');
+        setNewTheme('');
+        setNewDemographic('');
+        setNewDescription('');
+        setCoverFile(null);
+        fetchMangas();
+      }, 700);
+    } catch (err: any) {
+      setCreateMsg(`Gagal: ${err.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Buka Modal Edit
   const openEdit = (m: Manga) => {
     setEditingManga(m);
     setEditTitle(m.title || '');
@@ -64,7 +151,8 @@ export default function AdminDashboardPage() {
     setSaveMsg('');
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  // Submit Simpan Perubahan Edit
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingManga) return;
     setSaving(true);
@@ -88,9 +176,8 @@ export default function AdminDashboardPage() {
       });
 
       const resData = await res.json().catch(() => null);
-
       if (!res.ok) {
-        throw new Error(resData?.error || `Gagal update (Status: ${res.status})`);
+        throw new Error(resData?.error || `Gagal update (${res.status})`);
       }
 
       setSaveMsg('Berhasil diperbarui!');
@@ -119,31 +206,74 @@ export default function AdminDashboardPage() {
               Kelola judul komik dan unggah bab terbaru Yanama Komik
             </p>
           </div>
-          <Link
-            href="/"
-            className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] text-xs md:text-sm font-semibold px-4 py-2.5 rounded-xl border border-[#baa9a9]/30 transition shadow"
-          >
-            &larr; Lihat Web Utama
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { setIsAddOpen(true); setCreateMsg(''); }}
+              className="bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] font-bold text-xs md:text-sm px-4 py-2.5 rounded-xl transition shadow"
+            >
+              + Tambah Komik Baru
+            </button>
+            <Link
+              href="/"
+              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] text-xs md:text-sm font-semibold px-4 py-2.5 rounded-xl border border-[#baa9a9]/30 transition shadow"
+            >
+              &larr; Lihat Web Utama
+            </Link>
+          </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <Link
-            href="/upload"
-            className="bg-[#362d2d] hover:bg-[#2e2626] p-6 rounded-2xl border border-[#baa9a9]/20 flex items-center justify-between transition shadow-lg"
+        {/* Menu Kartu Aksi Cepat */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Kartu Tambah Komik */}
+          <div
+            onClick={() => { setIsAddOpen(true); setCreateMsg(''); }}
+            className="cursor-pointer group bg-[#362d2d] hover:bg-[#2e2626] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg transition flex flex-col justify-between"
           >
             <div>
-              <h2 className="text-lg font-bold text-[#f2ecec]">+ Upload Chapter Komik</h2>
-              <p className="text-xs text-[#baa9a9]/80 mt-1">Unggah gambar halaman ke Cloudflare R2</p>
+              <h2 className="text-lg font-bold text-[#f2ecec] group-hover:text-white transition">
+                + Tambah Komik Baru
+              </h2>
+              <p className="text-xs text-[#baa9a9]/80 mt-1">
+                Daftarkan judul, cover, genre, dan sinopsis komik baru
+              </p>
             </div>
-            <span className="bg-[#baa9a9] text-[#453a3a] font-bold text-xs px-3.5 py-2 rounded-lg">Buka Form</span>
+            <div className="mt-4">
+              <span className="bg-[#baa9a9] text-[#453a3a] font-bold text-xs px-3.5 py-1.5 rounded-lg group-hover:bg-[#cfc1c1] transition inline-block">
+                Buat Komik
+              </span>
+            </div>
+          </div>
+
+          {/* Kartu Upload Chapter */}
+          <Link
+            href="/upload"
+            className="group bg-[#362d2d] hover:bg-[#2e2626] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg transition flex flex-col justify-between"
+          >
+            <div>
+              <h2 className="text-lg font-bold text-[#f2ecec] group-hover:text-white transition">
+                + Upload Chapter Komik
+              </h2>
+              <p className="text-xs text-[#baa9a9]/80 mt-1">
+                Unggah lembaran halaman gambar ke Cloudflare R2
+              </p>
+            </div>
+            <div className="mt-4">
+              <span className="bg-[#baa9a9] text-[#453a3a] font-bold text-xs px-3.5 py-1.5 rounded-lg group-hover:bg-[#cfc1c1] transition inline-block">
+                Buka Form Upload
+              </span>
+            </div>
           </Link>
 
-          <div className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 flex items-center justify-between shadow-lg">
+          {/* Kartu Total Komik */}
+          <div className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-[#f2ecec]">Total Komik Terdaftar</h2>
-              <p className="text-xs text-[#baa9a9]/80 mt-1">Jumlah judul komik aktif di database</p>
+              <h2 className="text-lg font-bold text-[#f2ecec]">
+                Total Komik
+              </h2>
+              <p className="text-xs text-[#baa9a9]/80 mt-1">
+                Judul aktif di D1
+              </p>
             </div>
             <span className="text-2xl font-black text-[#f2ecec] bg-[#2a2323] px-4 py-2 rounded-xl border border-[#baa9a9]/30">
               {mangas.length}
@@ -202,7 +332,157 @@ export default function AdminDashboardPage() {
 
       </div>
 
-      {/* Modal Popup Edit Komik */}
+      {/* MODAL 1: TAMBAH KOMIK BARU */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#362d2d] border border-[#baa9a9]/30 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-3">
+              <h3 className="text-base font-bold text-[#f2ecec]">+ Tambah Judul Komik Baru</h3>
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(false)}
+                className="text-[#baa9a9] hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {createMsg && (
+              <div className="p-2.5 bg-[#2a2323] border border-[#baa9a9]/30 text-xs rounded-lg text-white font-medium">
+                {createMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateManga} className="space-y-3.5 overflow-y-auto pr-1">
+              <div>
+                <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Judul Komik *</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: One Piece"
+                  value={newTitle}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  required
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Slug (URL) *</label>
+                <input
+                  type="text"
+                  placeholder="one-piece"
+                  value={newSlug}
+                  onChange={(e) => setNewSlug(e.target.value)}
+                  required
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Cover Komik (Opsional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    if (e.target.files && e.target.files[0]) setCoverFile(e.target.files[0]);
+                  }}
+                  className="w-full text-xs text-[#baa9a9] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#baa9a9] file:text-[#453a3a] bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-1.5 cursor-pointer"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Status</label>
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
+                  >
+                    <option value="Ongoing">Ongoing</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Author / Pengarang</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Eiichiro Oda"
+                    value={newAuthor}
+                    onChange={(e) => setNewAuthor(e.target.value)}
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Genre</label>
+                  <input
+                    type="text"
+                    placeholder="Action, Fantasy"
+                    value={newGenre}
+                    onChange={(e) => setNewGenre(e.target.value)}
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Theme</label>
+                  <input
+                    type="text"
+                    placeholder="Pirates, Adventure"
+                    value={newTheme}
+                    onChange={(e) => setNewTheme(e.target.value)}
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Demographic</label>
+                  <input
+                    type="text"
+                    placeholder="Shounen"
+                    value={newDemographic}
+                    onChange={(e) => setNewDemographic(e.target.value)}
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Sinopsis / Deskripsi</label>
+                <textarea
+                  rows={3}
+                  placeholder="Cerita petualangan..."
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#baa9a9]/20">
+                <button
+                  type="button"
+                  onClick={() => setIsAddOpen(false)}
+                  className="bg-[#2a2323] text-[#baa9a9] text-xs px-4 py-2 rounded-lg border border-[#baa9a9]/30"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] text-xs font-bold px-4 py-2 rounded-lg transition"
+                >
+                  {creating ? 'Menyimpan...' : 'Tambah Komik'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: EDIT KOMIK */}
       {editingManga && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
           <div className="bg-[#362d2d] border border-[#baa9a9]/30 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col">
@@ -223,7 +503,7 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-3.5 overflow-y-auto pr-1">
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 overflow-y-auto pr-1">
               <div>
                 <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Judul</label>
                 <input
@@ -231,7 +511,7 @@ export default function AdminDashboardPage() {
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   required
-                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                 />
               </div>
 
@@ -242,7 +522,7 @@ export default function AdminDashboardPage() {
                   value={editSlug}
                   onChange={(e) => setEditSlug(e.target.value)}
                   required
-                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                 />
               </div>
 
@@ -252,7 +532,7 @@ export default function AdminDashboardPage() {
                   <select
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                   >
                     <option value="Ongoing">Ongoing</option>
                     <option value="Completed">Completed</option>
@@ -263,10 +543,9 @@ export default function AdminDashboardPage() {
                   <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Author / Penulis</label>
                   <input
                     type="text"
-                    placeholder="Contoh: Eiichiro Oda"
                     value={editAuthor}
                     onChange={(e) => setEditAuthor(e.target.value)}
-                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                   />
                 </div>
               </div>
@@ -276,10 +555,9 @@ export default function AdminDashboardPage() {
                   <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Genre</label>
                   <input
                     type="text"
-                    placeholder="Action, Comedy"
                     value={editGenre}
                     onChange={(e) => setEditGenre(e.target.value)}
-                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                   />
                 </div>
 
@@ -287,10 +565,9 @@ export default function AdminDashboardPage() {
                   <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Theme</label>
                   <input
                     type="text"
-                    placeholder="School, Delinquents"
                     value={editTheme}
                     onChange={(e) => setEditTheme(e.target.value)}
-                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                   />
                 </div>
 
@@ -298,10 +575,9 @@ export default function AdminDashboardPage() {
                   <label className="block text-xs uppercase mb-1 font-semibold text-[#baa9a9]">Demographic</label>
                   <input
                     type="text"
-                    placeholder="Shounen, Seinen"
                     value={editDemographic}
                     onChange={(e) => setEditDemographic(e.target.value)}
-                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                    className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                   />
                 </div>
               </div>
@@ -312,7 +588,7 @@ export default function AdminDashboardPage() {
                   rows={4}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none focus:border-[#baa9a9]"
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm outline-none"
                 />
               </div>
 
@@ -336,6 +612,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
