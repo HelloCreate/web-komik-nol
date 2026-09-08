@@ -16,7 +16,7 @@ export default function UploadChapterPage() {
   const [chapterNumber, setChapterNumber] = useState<string>('');
   const [title, setTitle] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);
-  
+
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMsg, setProgressMsg] = useState<string>('');
 
@@ -48,7 +48,7 @@ export default function UploadChapterPage() {
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedMangaId || !chapterNumber || files.length === 0) {
-      alert('Pilih komik, isi nomor chapter, dan pilih setidaknya 1 gambar halaman.');
+      alert('Pilih komik, isi nomor chapter, dan pilih minimal 1 gambar halaman.');
       return;
     }
 
@@ -59,11 +59,11 @@ export default function UploadChapterPage() {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
       const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
-      // 1. Upload file gambar satu per satu ke Cloudflare R2
+      // 1. Unggah gambar ke Cloudflare R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
-        setProgressMsg(`Mengunggah halaman ${i + 1} dari ${files.length} ke R2...`);
+        setProgressMsg(`Mengunggah gambar ${i + 1} dari ${files.length} ke Cloudflare R2...`);
         const file = files[i];
         const imageUrl = await uploadToR2(
           file,
@@ -75,25 +75,23 @@ export default function UploadChapterPage() {
         });
       }
 
-      // 2. Simpan metadata ke /api/chapters/save
+      // 2. Kirim data ke endpoint baru /api/chapters/create
       setProgressMsg('Menyimpan data chapter ke database D1...');
-      const payload = {
-        mangaId: Number(selectedMangaId),
-        chapterNumber: String(chapterNumber).trim(),
-        title: title.trim(),
-        images: uploadedImages,
-      };
 
-      const saveRes = await fetch('/api/chapters/save', {
+      const res = await fetch('/api/chapters/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          mangaId: Number(selectedMangaId),
+          chapterNumber: String(chapterNumber).trim(),
+          title: title.trim(),
+          images: uploadedImages,
+        }),
       });
 
-      const resText = await saveRes.text();
+      const resText = await res.text();
       let resJson: any = null;
       try {
         resJson = JSON.parse(resText);
@@ -101,11 +99,11 @@ export default function UploadChapterPage() {
         resJson = null;
       }
 
-      if (!saveRes.ok) {
-        throw new Error(resJson?.error || resText || 'Gagal menyimpan data chapter.');
+      if (!res.ok) {
+        throw new Error(resJson?.error || resText || `Error ${res.status}`);
       }
 
-      setProgressMsg('Chapter berhasil diunggah dan disimpan!');
+      setProgressMsg('Chapter berhasil diunggah dan tersimpan!');
       setChapterNumber('');
       setTitle('');
       setFiles([]);
@@ -120,7 +118,7 @@ export default function UploadChapterPage() {
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
       <div className="max-w-3xl mx-auto space-y-6">
         
-        {/* Header Navigasi */}
+        {/* Header Dashboard */}
         <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
           <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
             Upload Chapter Komik
@@ -141,14 +139,14 @@ export default function UploadChapterPage() {
           </div>
         </div>
 
-        {/* Notifikasi Pesan */}
+        {/* Kotak Pesan Progress */}
         {progressMsg && (
           <div className="p-3.5 bg-[#362d2d] border border-[#baa9a9] text-[#f2ecec] rounded-xl text-sm">
             {progressMsg}
           </div>
         )}
 
-        {/* Form Upload */}
+        {/* Form Input Chapter */}
         <form
           onSubmit={handleUpload}
           className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 space-y-5 shadow-lg"
@@ -215,7 +213,7 @@ export default function UploadChapterPage() {
             />
             {files.length > 0 && (
               <p className="mt-2 text-xs text-[#baa9a9]/80">
-                Terpilih <strong>{files.length}</strong> berkas halaman.
+                Terpilih <strong>{files.length}</strong> gambar halaman.
               </p>
             )}
           </div>
