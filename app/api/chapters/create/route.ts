@@ -19,35 +19,49 @@ export async function POST(req: Request) {
     const safeChapterNumber = String(chapterNumber).trim();
     const safeTitle = title ? String(title).trim() : '';
 
-    // 1. Simpan atau update chapter di Cloudflare D1
-    await queryD1(
-      `INSERT INTO chapters (manga_id, chapter_number, title)
-       VALUES (?, ?, ?)
-       ON CONFLICT(manga_id, chapter_number) DO UPDATE SET
-         title = excluded.title`,
-      [safeMangaId, safeChapterNumber, safeTitle]
-    );
-
-    // 2. Ambil ID chapter dari database D1
-    const chapterRows = await queryD1<any>(
+    // 1. Cek apakah chapter ini sudah pernah dibuat sebelumnya
+    const existing = await queryD1<any>(
       'SELECT id FROM chapters WHERE manga_id = ? AND chapter_number = ? LIMIT 1',
       [safeMangaId, safeChapterNumber]
     );
 
-    if (!chapterRows || chapterRows.length === 0) {
-      throw new Error('Gagal mengambil ID chapter yang baru disimpan');
+    let chapterId: number;
+
+    if (existing && existing.length > 0) {
+      // Jika chapter sudah ada: UPDATE judulnya
+      chapterId = existing[0].id;
+      await queryD1(
+        'UPDATE chapters SET title = ? WHERE id = ?',
+        [safeTitle, chapterId]
+      );
+    } else {
+      // Jika chapter belum ada: INSERT baru
+      await queryD1(
+        'INSERT INTO chapters (manga_id, chapter_number, title) VALUES (?, ?, ?)',
+        [safeMangaId, safeChapterNumber, safeTitle]
+      );
+
+      // Ambil ID yang baru saja dibuat
+      const created = await queryD1<any>(
+        'SELECT id FROM chapters WHERE manga_id = ? AND chapter_number = ? LIMIT 1',
+        [safeMangaId, safeChapterNumber]
+      );
+
+      if (!created || created.length === 0) {
+        throw new Error('Gagal mendapatkan ID chapter yang baru disimpan');
+      }
+
+      chapterId = created[0].id;
     }
 
-    const chapterId = chapterRows[0].id;
-
-    // 3. Masukkan gambar-gambar halaman ke tabel chapter_images
+    // 2. Simpan daftar gambar halaman ke chapter_images
     if (Array.isArray(images) && images.length > 0) {
+      // Hapus data halaman lama jika sebelumnya sudah ada gambar
       await queryD1('DELETE FROM chapter_images WHERE chapter_id = ?', [chapterId]);
 
       for (const img of images) {
         await queryD1(
-          `INSERT INTO chapter_images (chapter_id, page_number, image_url)
-           VALUES (?, ?, ?)`,
+          'INSERT INTO chapter_images (chapter_id, page_number, image_url) VALUES (?, ?, ?)',
           [chapterId, Number(img.pageNumber), String(img.imageUrl)]
         );
       }
