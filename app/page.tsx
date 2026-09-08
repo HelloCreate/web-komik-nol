@@ -9,36 +9,45 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6 md:p-12">
+    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-4 md:p-10">
       <div className="max-w-6xl mx-auto space-y-8">
-        <header className="flex justify-between items-center border-b border-slate-800 pb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-amber-400">Yanama Comic</h1>
-          <div className="space-x-3">
+        
+        {/* Header Responsif */}
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#baa9a9]/20 pb-5">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#f2ecec]">
+            Yanama Comic
+          </h1>
+
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/admin"
-              className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm border border-slate-700 transition"
+              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] text-xs md:text-sm font-medium px-3.5 py-2 rounded-lg border border-[#baa9a9]/30 transition"
             >
               Admin
             </Link>
             <Link
               href="/upload"
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition"
+              className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] text-xs md:text-sm font-semibold px-3.5 py-2 rounded-lg shadow transition whitespace-nowrap"
             >
               Upload Chapter
             </Link>
           </div>
         </header>
 
+        {/* Section List Komik */}
         <section>
-          <h2 className="text-xl font-semibold mb-6">Daftar Komik</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <h2 className="text-lg md:text-xl font-semibold text-[#f2ecec] mb-6">
+            Daftar Komik
+          </h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
             {mangas.map((manga) => (
               <Link
                 key={manga.id}
                 href={`/manga/${manga.slug}`}
-                className="group bg-slate-800 rounded-xl overflow-hidden border border-slate-700/60 hover:border-amber-400/50 transition duration-200"
+                className="group bg-[#362d2d] rounded-xl overflow-hidden border border-[#baa9a9]/20 hover:border-[#baa9a9] transition duration-200 shadow-md"
               >
-                <div className="aspect-[3/4] bg-slate-950 relative overflow-hidden">
+                <div className="aspect-[3/4] bg-[#2a2323] relative overflow-hidden flex items-center justify-center">
                   {manga.cover_url ? (
                     <img
                       src={manga.cover_url}
@@ -46,13 +55,11 @@ export default async function HomePage() {
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">
-                      No Cover
-                    </div>
+                    <span className="text-xs text-[#baa9a9]/50">No Cover</span>
                   )}
                 </div>
                 <div className="p-3">
-                  <h3 className="font-semibold text-sm line-clamp-1 group-hover:text-amber-400 transition">
+                  <h3 className="font-medium text-sm text-[#f2ecec] truncate group-hover:text-[#baa9a9] transition">
                     {manga.title}
                   </h3>
                 </div>
@@ -61,9 +68,12 @@ export default async function HomePage() {
           </div>
 
           {mangas.length === 0 && (
-            <p className="text-slate-500 text-center py-20">Belum ada komik yang tersedia.</p>
+            <div className="text-center py-24 text-[#baa9a9]/60 text-sm">
+              Belum ada komik yang tersedia.
+            </div>
           )}
         </section>
+
       </div>
     </div>
   );
