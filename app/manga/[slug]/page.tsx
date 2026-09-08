@@ -2,159 +2,167 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { queryD1 } from '@/lib/db';
 
-export const dynamic = 'force-dynamic';
-
-interface MangaDetailPageProps {
+interface MangaPageProps {
   params: Promise<{ slug: string }>;
 }
 
-function formatCoverUrl(url?: string | null): string {
-  if (!url) return '';
-  if (url.includes('.r2.dev/')) {
-    const key = url.split('.r2.dev/')[1];
-    return `/api/image?key=${encodeURIComponent(key)}`;
-  }
-  return url;
+// Helper untuk memecah teks berkoma menjadi array tag bersih
+function parseTags(value?: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
 
-export default async function MangaDetailPage({ params }: MangaDetailPageProps) {
+export default async function MangaDetailPage({ params }: MangaPageProps) {
   const { slug } = await params;
 
-  // 1. Ambil detail data komik dari D1
-  const mangaResults = await queryD1<any>(
+  // 1. Ambil data komik lengkap
+  const mangas = await queryD1<any>(
     'SELECT * FROM mangas WHERE slug = ? LIMIT 1',
     [slug]
   );
+  const manga = mangas[0];
+  if (!manga) notFound();
 
-  const manga = mangaResults[0];
-  if (!manga) {
-    notFound();
-  }
-
-  // 2. Ambil daftar chapter komik ini
+  // 2. Ambil daftar chapter komik
   const chapters = await queryD1<any>(
-    'SELECT * FROM chapters WHERE manga_id = ? ORDER BY CAST(chapter_number AS REAL) DESC',
+    'SELECT * FROM chapters WHERE manga_id = ? ORDER BY CAST(chapter_number AS REAL) DESC, id DESC',
     [manga.id]
   );
 
-  const coverSrc = formatCoverUrl(manga.cover_url);
+  // Pisahkan string koma menjadi badge terpisah
+  const genres = parseTags(manga.genre);
+  const themes = parseTags(manga.theme);
+  const demographics = parseTags(manga.demographic);
 
   return (
-    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-4 md:p-10">
+    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         
-        {/* Tombol Navigasi Kembali */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-sm text-[#baa9a9] hover:text-[#f2ecec] transition font-medium"
-        >
-          &larr; Kembali ke Beranda
-        </Link>
+        {/* Navigasi Atas */}
+        <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
+          <Link
+            href="/"
+            className="text-xs md:text-sm bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] px-3.5 py-2 rounded-lg border border-[#baa9a9]/30 transition"
+          >
+            &larr; Beranda
+          </Link>
+          <Link
+            href="/admin"
+            className="text-xs md:text-sm bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] font-bold px-3.5 py-2 rounded-lg transition"
+          >
+            Panel Admin
+          </Link>
+        </div>
 
-        {/* Panel Informasi Komik */}
-        <div className="bg-[#362d2d] rounded-2xl border border-[#baa9a9]/20 p-5 md:p-8 flex flex-col md:flex-row gap-6 shadow-lg">
-          {/* Cover Gambar */}
-          <div className="w-full md:w-52 flex-shrink-0 aspect-[3/4] bg-[#2a2323] rounded-xl overflow-hidden border border-[#baa9a9]/20 flex items-center justify-center">
-            {coverSrc ? (
+        {/* Informasi Utama Komik */}
+        <div className="bg-[#362d2d] border border-[#baa9a9]/20 rounded-2xl p-5 md:p-7 shadow-lg flex flex-col md:flex-row gap-6">
+          {/* Cover */}
+          {manga.cover_url && (
+            <div className="w-full md:w-56 flex-shrink-0">
               <img
-                src={coverSrc}
+                src={manga.cover_url}
                 alt={manga.title}
-                className="w-full h-full object-cover"
+                className="w-full h-auto rounded-xl object-cover border border-[#baa9a9]/30 shadow-md"
               />
-            ) : (
-              <span className="text-xs text-[#baa9a9]/50">No Cover</span>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Info & Metadata */}
-          <div className="flex-1 flex flex-col justify-start space-y-4">
-            <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec] leading-snug">
-              {manga.title}
-            </h1>
-
-            {/* Author */}
-            {manga.author && (
-              <p className="text-xs text-[#baa9a9]/80">
-                <span className="font-semibold text-[#f2ecec]">Author: </span>
-                {manga.author}
-              </p>
-            )}
-
-            {/* Badges Status & Demographic */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              {manga.status && (
-                <span className="bg-[#453a3a] text-[#f2ecec] px-3 py-1 rounded-full border border-[#baa9a9]/30">
-                  {manga.status}
-                </span>
-              )}
-              {manga.demographic && (
-                <span className="bg-[#453a3a] text-[#baa9a9] px-3 py-1 rounded-full border border-[#baa9a9]/30">
-                  {manga.demographic}
-                </span>
-              )}
-              {manga.theme && (
-                <span className="bg-[#2a2323] text-[#baa9a9]/90 px-3 py-1 rounded-full border border-[#baa9a9]/20">
-                  {manga.theme}
-                </span>
+          {/* Metadata & Badges */}
+          <div className="flex-1 space-y-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-[#f2ecec] leading-snug">
+                {manga.title}
+              </h1>
+              {manga.author && (
+                <p className="text-xs md:text-sm text-[#baa9a9]/80 mt-1">
+                  Author: <span className="text-[#f2ecec] font-medium">{manga.author}</span>
+                </p>
               )}
             </div>
 
-            {/* Genre List */}
-            {manga.genres && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {manga.genres.split(',').map((genre: string, idx: number) => (
-                  <span
-                    key={idx}
-                    className="bg-[#2a2323] text-[#baa9a9] text-[11px] font-medium px-2.5 py-0.5 rounded border border-[#baa9a9]/10"
-                  >
-                    {genre.trim()}
-                  </span>
-                ))}
+            {/* Badges Terpisah Rapi */}
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {/* Status Badge */}
+              <span className="bg-[#baa9a9] text-[#453a3a] text-xs font-bold px-2.5 py-1 rounded-md">
+                {manga.status || 'Ongoing'}
+              </span>
+
+              {/* Genre Badges */}
+              {genres.map((g, idx) => (
+                <span
+                  key={`genre-${idx}`}
+                  className="bg-[#2a2323] text-[#f2ecec] border border-[#baa9a9]/30 text-xs px-2.5 py-1 rounded-md"
+                >
+                  {g}
+                </span>
+              ))}
+
+              {/* Theme Badges */}
+              {themes.map((t, idx) => (
+                <span
+                  key={`theme-${idx}`}
+                  className="bg-[#2a2323] text-[#baa9a9] border border-[#baa9a9]/20 text-xs px-2.5 py-1 rounded-md"
+                >
+                  {t}
+                </span>
+              ))}
+
+              {/* Demographic Badges */}
+              {demographics.map((d, idx) => (
+                <span
+                  key={`demo-${idx}`}
+                  className="bg-[#1f1919] text-[#baa9a9]/90 border border-[#baa9a9]/20 text-xs px-2.5 py-1 rounded-md"
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+
+            {/* Sinopsis */}
+            {manga.description && (
+              <div className="pt-2 border-t border-[#baa9a9]/10">
+                <p className="text-xs md:text-sm text-[#e2d9d9] leading-relaxed whitespace-pre-line">
+                  {manga.description}
+                </p>
               </div>
             )}
-
-            {/* Sinopsis / Deskripsi */}
-            <div className="pt-2 border-t border-[#baa9a9]/15">
-              <p className="text-xs md:text-sm text-[#baa9a9]/90 leading-relaxed line-clamp-6">
-                {manga.description || 'Tidak ada deskripsi tersedia.'}
-              </p>
-            </div>
           </div>
         </div>
 
-        {/* Panel Daftar Chapter */}
-        <div className="bg-[#362d2d] rounded-2xl border border-[#baa9a9]/20 p-5 md:p-8 shadow-lg">
-          <h2 className="text-lg md:text-xl font-bold text-[#f2ecec] mb-4">
-            Daftar Chapter
+        {/* Daftar Chapter */}
+        <div className="bg-[#362d2d] border border-[#baa9a9]/20 rounded-2xl p-5 shadow-lg space-y-3">
+          <h2 className="text-base font-bold text-[#f2ecec] border-b border-[#baa9a9]/20 pb-3">
+            Daftar Chapter ({chapters.length})
           </h2>
 
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {chapters.map((ch) => (
               <Link
                 key={ch.id}
-                href={`/manga/${manga.slug}/chapter/${ch.chapter_number}`}
-                className="flex items-center justify-between p-3.5 bg-[#2a2323] hover:bg-[#221c1c] border border-[#baa9a9]/15 hover:border-[#baa9a9]/50 rounded-xl transition group"
+                href={`/manga/${manga.slug}/chapter/${ch.id}`}
+                className="bg-[#2a2323] hover:bg-[#201a1a] p-3 rounded-xl border border-[#baa9a9]/20 flex justify-between items-center transition group"
               >
                 <div>
-                  <span className="font-semibold text-sm text-[#f2ecec] group-hover:text-[#baa9a9] transition">
+                  <span className="font-semibold text-sm text-[#f2ecec] group-hover:text-white">
                     Chapter {ch.chapter_number}
                   </span>
                   {ch.title && (
-                    <span className="text-xs text-[#baa9a9]/70 ml-2">
-                      - {ch.title}
-                    </span>
+                    <p className="text-xs text-[#baa9a9]/70 line-clamp-1">{ch.title}</p>
                   )}
                 </div>
-                <span className="text-xs text-[#baa9a9]/50 group-hover:text-[#f2ecec] transition">
+                <span className="text-xs bg-[#baa9a9]/20 text-[#baa9a9] px-2 py-1 rounded">
                   Baca &rarr;
                 </span>
               </Link>
             ))}
 
             {chapters.length === 0 && (
-              <div className="text-center py-10 text-sm text-[#baa9a9]/60">
+              <p className="col-span-full py-8 text-center text-xs text-[#baa9a9]/60">
                 Belum ada chapter yang diunggah.
-              </div>
+              </p>
             )}
           </div>
         </div>
