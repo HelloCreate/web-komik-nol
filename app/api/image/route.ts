@@ -31,7 +31,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    // Gunakan fungsi statis Readable.toWeb
     const webStream = Readable.toWeb(data.Body as any);
 
     return new Response(webStream as any, {
