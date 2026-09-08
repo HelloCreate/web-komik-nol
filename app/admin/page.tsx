@@ -7,6 +7,8 @@ interface Manga {
   id: number;
   title: string;
   slug: string;
+  description?: string;
+  status?: string;
   cover_url?: string;
 }
 
@@ -14,25 +16,80 @@ export default function AdminDashboardPage() {
   const [mangas, setMangas] = useState<Manga[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    async function loadMangas() {
-      try {
-        const res = await fetch('/api/admin/mangas', { cache: 'no-store' });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setMangas(data);
-        }
-      } catch (err: any) {
-        console.error('Gagal mengambil daftar komik:', err.message);
-      } finally {
-        setLoading(false);
+  // State untuk modal edit komik
+  const [editingManga, setEditingManga] = useState<Manga | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSlug, setEditSlug] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStatus, setEditStatus] = useState('Ongoing');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+
+  const fetchMangas = async () => {
+    try {
+      const res = await fetch('/api/admin/mangas', { cache: 'no-store' });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMangas(data);
       }
+    } catch (err: any) {
+      console.error('Gagal mengambil daftar komik:', err.message);
+    } finally {
+      setLoading(false);
     }
-    loadMangas();
+  };
+
+  useEffect(() => {
+    fetchMangas();
   }, []);
 
+  const openEditModal = (manga: Manga) => {
+    setEditingManga(manga);
+    setEditTitle(manga.title || '');
+    setEditSlug(manga.slug || '');
+    setEditDescription(manga.description || '');
+    setEditStatus(manga.status || 'Ongoing');
+    setSaveMsg('');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingManga) return;
+
+    setSaving(true);
+    setSaveMsg('Menyimpan perubahan...');
+
+    try {
+      const res = await fetch(`/api/admin/mangas/${editingManga.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          slug: editSlug,
+          description: editDescription,
+          status: editStatus,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Gagal memperbarui data komik');
+      }
+
+      setSaveMsg('Berhasil disimpan!');
+      setTimeout(() => {
+        setEditingManga(null);
+        fetchMangas();
+      }, 700);
+    } catch (err: any) {
+      setSaveMsg(`Error: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10">
+    <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10 relative">
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* Header Dashboard */}
@@ -56,7 +113,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Menu Aksi Cepat */}
+        {/* Menu Kartu Ringkasan */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Link
             href="/upload"
@@ -90,7 +147,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Daftar Komik yang Ada */}
+        {/* Daftar Komik & Tombol Aksi */}
         <div className="bg-[#362d2d] p-6 rounded-2xl border border-[#baa9a9]/20 shadow-lg space-y-4">
           <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-3">
             <h3 className="text-base font-bold text-[#f2ecec]">
@@ -110,7 +167,7 @@ export default function AdminDashboardPage() {
               {mangas.map((manga) => (
                 <div
                   key={manga.id}
-                  className="py-3.5 flex items-center justify-between gap-3"
+                  className="py-3.5 flex flex-wrap items-center justify-between gap-3"
                 >
                   <div>
                     <h4 className="font-semibold text-sm text-[#f2ecec]">
@@ -121,6 +178,7 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
 
+                  {/* Tombol Aksi: Lihat | Edit | + Chapter */}
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/manga/${manga.slug}`}
@@ -128,6 +186,16 @@ export default function AdminDashboardPage() {
                     >
                       Lihat
                     </Link>
+
+                    {/* Tombol Edit Komik */}
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(manga)}
+                      className="text-xs bg-[#2a2323] hover:bg-[#baa9a9] hover:text-[#453a3a] text-[#f2ecec] font-semibold px-3 py-1.5 rounded-lg border border-[#baa9a9]/40 transition cursor-pointer"
+                    >
+                      Edit
+                    </button>
+
                     <Link
                       href="/upload"
                       className="text-xs bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] font-bold px-3 py-1.5 rounded-lg transition"
@@ -146,6 +214,104 @@ export default function AdminDashboardPage() {
         </div>
 
       </div>
+
+      {/* Modal Edit Komik */}
+      {editingManga && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#362d2d] border border-[#baa9a9]/30 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-3">
+              <h3 className="text-lg font-bold text-[#f2ecec]">
+                Edit Komik: {editingManga.title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingManga(null)}
+                className="text-[#baa9a9] hover:text-[#f2ecec] text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {saveMsg && (
+              <div className="p-2.5 bg-[#2a2323] border border-[#baa9a9]/30 text-xs rounded-lg text-white">
+                {saveMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase mb-1 text-[#baa9a9]">
+                  Judul Komik
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  required
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase mb-1 text-[#baa9a9]">
+                  Slug (URL)
+                </label>
+                <input
+                  type="text"
+                  value={editSlug}
+                  onChange={(e) => setEditSlug(e.target.value)}
+                  required
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase mb-1 text-[#baa9a9]">
+                  Status
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm focus:outline-none"
+                >
+                  <option value="Ongoing">Ongoing</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase mb-1 text-[#baa9a9]">
+                  Sinopsis / Deskripsi
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2 text-white text-sm focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingManga(null)}
+                  className="bg-[#2a2323] hover:bg-[#201a1a] text-[#baa9a9] text-xs font-semibold px-4 py-2 rounded-lg border border-[#baa9a9]/30"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] text-xs font-bold px-4 py-2 rounded-lg transition"
+                >
+                  {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
