@@ -6,7 +6,7 @@ interface MangaPageProps {
   params: Promise<{ slug: string }>;
 }
 
-// Helper untuk memecah teks berkoma menjadi array tag bersih
+// Helper untuk memecah string berkoma menjadi badge terpisah
 function parseTags(value?: string | null): string[] {
   if (!value) return [];
   return value
@@ -41,19 +41,13 @@ export default async function MangaDetailPage({ params }: MangaPageProps) {
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         
-        {/* Navigasi Atas */}
-        <div className="flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
+        {/* Navigasi Atas - Hanya ada tombol Beranda untuk pembaca */}
+        <div className="flex justify-start items-center border-b border-[#baa9a9]/20 pb-4">
           <Link
             href="/"
-            className="text-xs md:text-sm bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] px-3.5 py-2 rounded-lg border border-[#baa9a9]/30 transition"
+            className="text-xs md:text-sm bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] px-4 py-2 rounded-lg border border-[#baa9a9]/30 transition shadow-sm font-medium"
           >
             &larr; Beranda
-          </Link>
-          <Link
-            href="/admin"
-            className="text-xs md:text-sm bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] font-bold px-3.5 py-2 rounded-lg transition"
-          >
-            Panel Admin
           </Link>
         </div>
 
