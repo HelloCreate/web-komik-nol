@@ -12,26 +12,11 @@ export default async function HomePage() {
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-4 md:p-10">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* Header Responsif */}
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#baa9a9]/20 pb-5">
+        {/* Header Bersih Tanpa Tombol Admin & Upload */}
+        <header className="border-b border-[#baa9a9]/20 pb-5">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#f2ecec]">
             Yanama Comic
           </h1>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/admin"
-              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] text-xs md:text-sm font-medium px-3.5 py-2 rounded-lg border border-[#baa9a9]/30 transition"
-            >
-              Admin
-            </Link>
-            <Link
-              href="/upload"
-              className="bg-[#baa9a9] hover:bg-[#a89595] text-[#453a3a] text-xs md:text-sm font-semibold px-3.5 py-2 rounded-lg shadow transition whitespace-nowrap"
-            >
-              Upload Chapter
-            </Link>
-          </div>
         </header>
 
         {/* Section List Komik */}
