@@ -116,34 +116,42 @@ export default function AdminDashboardPage() {
 
       setMsg(editId ? 'Menyimpan perubahan komik...' : 'Menyimpan komik baru...');
 
-      // Gunakan method POST untuk kedua mode (Create maupun Edit)
+      const payload: any = {
+        title,
+        slug,
+        description,
+        genres,
+        theme,
+        demographic,
+        status,
+        author,
+      };
+
+      if (editId) {
+        payload.id = editId;
+        if (uploadedCoverUrl) {
+          payload.coverUrl = uploadedCoverUrl;
+        }
+      } else {
+        payload.coverUrl = uploadedCoverUrl || '';
+      }
+
       const res = await fetch('/api/admin/mangas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editId || undefined,
-          title,
-          slug,
-          coverUrl: uploadedCoverUrl || (editId ? null : ''),
-          description,
-          genres,
-          theme,
-          demographic,
-          status,
-          author,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const rawText = await res.text();
-      let data: any = {};
+      const resText = await res.text();
+      let resJson: any = null;
       try {
-        data = JSON.parse(rawText);
+        resJson = JSON.parse(resText);
       } catch {
-        data = { error: rawText };
+        resJson = null;
       }
 
       if (!res.ok) {
-        throw new Error(data.error || `Error ${res.status}: Gagal memproses data`);
+        throw new Error(resJson?.error || resText || `Error status ${res.status}`);
       }
 
       setMsg(editId ? 'Data komik berhasil diperbarui!' : 'Komik baru berhasil ditambahkan!');
