@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
-import Link from 'next/link';
 import { uploadToR2 } from '@/lib/uploadToR2';
 
 interface Manga {
@@ -59,7 +58,7 @@ export default function UploadChapterPage() {
       const selectedManga = mangas.find((m) => String(m.id) === String(selectedMangaId));
       const mangaSlug = selectedManga ? selectedManga.slug : 'manga';
 
-      // 1. Upload semua file ke Cloudflare R2
+      // 1. Upload file ke Cloudflare R2
       const uploadedImages: { pageNumber: number; imageUrl: string }[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -118,24 +117,28 @@ export default function UploadChapterPage() {
     <div className="min-h-screen bg-[#453a3a] text-[#baa9a9] p-6 md:p-10 relative">
       <div className="max-w-3xl mx-auto space-y-6">
         
-        {/* Header Navigasi - Z-Index Tinggi & Pointer Events Auto */}
-        <div className="relative z-50 flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
+        {/* Header Navigasi dengan z-[9999] dan onClick eksplisit */}
+        <div className="relative z-[9999] flex justify-between items-center border-b border-[#baa9a9]/20 pb-4">
           <h1 className="text-2xl md:text-3xl font-bold text-[#f2ecec]">
             Upload Chapter Komik
           </h1>
           <div className="flex items-center gap-3">
-            <Link
-              href="/admin"
-              className="inline-flex items-center justify-center bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] active:scale-95 text-xs md:text-sm font-bold px-4 py-2 rounded-lg cursor-pointer transition shadow-md pointer-events-auto"
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/admin'; }}
+              style={{ pointerEvents: 'auto' }}
+              className="bg-[#baa9a9] hover:bg-[#cfc1c1] text-[#453a3a] active:scale-95 text-xs md:text-sm font-bold px-4 py-2 rounded-lg cursor-pointer transition shadow-md select-none"
             >
               Panel Admin
-            </Link>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] active:scale-95 text-xs md:text-sm font-semibold px-4 py-2 rounded-lg border border-[#baa9a9]/30 cursor-pointer transition pointer-events-auto"
+            </button>
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/'; }}
+              style={{ pointerEvents: 'auto' }}
+              className="bg-[#362d2d] hover:bg-[#2b2424] text-[#baa9a9] hover:text-[#f2ecec] active:scale-95 text-xs md:text-sm font-semibold px-4 py-2 rounded-lg border border-[#baa9a9]/30 cursor-pointer transition select-none"
             >
               Beranda
-            </Link>
+            </button>
           </div>
         </div>
 
