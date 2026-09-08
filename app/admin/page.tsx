@@ -114,21 +114,29 @@ export default function AdminDashboardPage() {
 
       setMsg(editId ? 'Menyimpan perubahan komik...' : 'Menyimpan komik baru...');
 
+      const payload: any = {
+        title,
+        slug,
+        description,
+        genres,
+        theme,
+        demographic,
+        status,
+        author,
+      };
+
+      if (editId) {
+        payload.id = editId;
+      }
+
+      if (uploadedCoverUrl) {
+        payload.coverUrl = uploadedCoverUrl;
+      }
+
       const res = await fetch('/api/admin/mangas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editId,
-          title,
-          slug,
-          coverUrl: uploadedCoverUrl || undefined,
-          description,
-          genres,
-          theme,
-          demographic,
-          status,
-          author,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const resText = await res.text();
@@ -228,14 +236,21 @@ export default function AdminDashboardPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">Slug URL (unik)</label>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">
+                Slug URL {editId && <span className="text-[10px] text-yellow-400 font-normal">(Terkunci saat edit)</span>}
+              </label>
               <input
                 type="text"
                 placeholder="contoh: solo-leveling"
                 value={slug}
+                readOnly={!!editId}
                 onChange={(e) => setSlug(e.target.value)}
                 required
-                className="w-full bg-[#2a2323] border border-[#baa9a9]/30 rounded-lg p-2.5 text-white focus:outline-none focus:border-[#baa9a9]"
+                className={`w-full border border-[#baa9a9]/30 rounded-lg p-2.5 focus:outline-none ${
+                  editId 
+                    ? 'bg-[#221c1c] text-gray-400 cursor-not-allowed' 
+                    : 'bg-[#2a2323] text-white focus:border-[#baa9a9]'
+                }`}
               />
             </div>
           </div>
