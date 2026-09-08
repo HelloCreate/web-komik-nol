@@ -9,75 +9,51 @@ export async function POST(req: Request) {
     const {
       id,
       title,
-      coverUrl,
+      slug,
       description,
-      genres,
-      theme,
-      demographic,
       status,
       author,
+      genre,
+      theme,
+      demographic,
     } = body;
 
-    if (!id || !title) {
+    if (!id || !title || !slug) {
       return NextResponse.json(
-        { error: 'ID dan Judul wajib diisi' },
+        { error: 'ID, Judul, dan Slug wajib diisi' },
         { status: 400 }
       );
     }
 
-    const numericId = Number(id);
-    const safeTitle = String(title).trim();
-    const safeDesc = description ? String(description).trim() : '';
-    const safeGenres = genres ? String(genres).trim() : '';
-    const safeTheme = theme ? String(theme).trim() : '';
-    const safeDemo = demographic ? String(demographic) : 'Shounen';
-    const safeStatus = status ? String(status) : 'Ongoing';
-    const safeAuthor = author ? String(author).trim() : '';
+    await queryD1(
+      `UPDATE mangas SET 
+        title = ?, 
+        slug = ?, 
+        description = ?, 
+        status = ?, 
+        author = ?, 
+        genre = ?, 
+        theme = ?, 
+        demographic = ?
+      WHERE id = ?`,
+      [
+        String(title).trim(),
+        String(slug).trim(),
+        description ? String(description).trim() : '',
+        status ? String(status).trim() : 'Ongoing',
+        author ? String(author).trim() : '',
+        genre ? String(genre).trim() : '',
+        theme ? String(theme).trim() : '',
+        demographic ? String(demographic).trim() : '',
+        Number(id),
+      ]
+    );
 
-    // Perhatikan: KITA SAMA SEKALI TIDAK MENGUPDATE KOLOM SLUG!
-    // Ini menjamin SQLITE TIDAK AKAN PERNAH memicu UNIQUE constraint slug.
-    if (coverUrl && typeof coverUrl === 'string' && coverUrl.trim() !== '') {
-      await queryD1(
-        `UPDATE mangas SET 
-          title = ?, cover_url = ?, description = ?, 
-          genres = ?, theme = ?, demographic = ?, status = ?, author = ?
-        WHERE id = ?`,
-        [
-          safeTitle,
-          coverUrl.trim(),
-          safeDesc,
-          safeGenres,
-          safeTheme,
-          safeDemo,
-          safeStatus,
-          safeAuthor,
-          numericId,
-        ]
-      );
-    } else {
-      await queryD1(
-        `UPDATE mangas SET 
-          title = ?, description = ?, 
-          genres = ?, theme = ?, demographic = ?, status = ?, author = ?
-        WHERE id = ?`,
-        [
-          safeTitle,
-          safeDesc,
-          safeGenres,
-          safeTheme,
-          safeDemo,
-          safeStatus,
-          safeAuthor,
-          numericId,
-        ]
-      );
-    }
-
-    return NextResponse.json({ success: true, message: 'Berhasil diperbarui' });
+    return NextResponse.json({ success: true, message: 'Komik berhasil diperbarui' });
   } catch (error: any) {
     console.error('Update manga error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Gagal memperbarui komik di database D1' },
+      { error: error?.message || 'Gagal menyimpan perubahan ke Cloudflare D1' },
       { status: 500 }
     );
   }
