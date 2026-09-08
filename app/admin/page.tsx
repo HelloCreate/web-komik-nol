@@ -112,47 +112,74 @@ export default function AdminDashboardPage() {
         uploadedCoverUrl = await uploadToR2(coverFile, `covers/${slug || Date.now()}`);
       }
 
-      setMsg(editId ? 'Menyimpan perubahan komik...' : 'Menyimpan komik baru...');
-
-      const payload: any = {
-        title,
-        slug,
-        description,
-        genres,
-        theme,
-        demographic,
-        status,
-        author,
-      };
-
       if (editId) {
-        payload.id = editId;
+        // === MODE EDIT: PANGGIL ENDPOINT UPDATE SECARA KHUSUS ===
+        setMsg('Menyimpan perubahan komik...');
+        const res = await fetch('/api/admin/mangas/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editId,
+            title,
+            coverUrl: uploadedCoverUrl || undefined,
+            description,
+            genres,
+            theme,
+            demographic,
+            status,
+            author,
+          }),
+        });
+
+        const resText = await res.text();
+        let resJson: any = null;
+        try {
+          resJson = JSON.parse(resText);
+        } catch {
+          resJson = null;
+        }
+
+        if (!res.ok) {
+          throw new Error(resJson?.error || resText || `Error ${res.status}`);
+        }
+
+        setMsg('Data komik berhasil diperbarui!');
+        handleCancelEdit();
+      } else {
+        // === MODE TAMBAH BARU ===
+        setMsg('Menyimpan komik baru...');
+        const res = await fetch('/api/admin/mangas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            slug,
+            coverUrl: uploadedCoverUrl || '',
+            description,
+            genres,
+            theme,
+            demographic,
+            status,
+            author,
+          }),
+        });
+
+        const resText = await res.text();
+        let resJson: any = null;
+        try {
+          resJson = JSON.parse(resText);
+        } catch {
+          resJson = null;
+        }
+
+        if (!res.ok) {
+          throw new Error(resJson?.error || resText || `Error ${res.status}`);
+        }
+
+        setMsg('Komik baru berhasil ditambahkan!');
+        handleCancelEdit();
       }
 
-      if (uploadedCoverUrl) {
-        payload.coverUrl = uploadedCoverUrl;
-      }
-
-      const res = await fetch('/api/admin/mangas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const resText = await res.text();
-      let resJson: any = null;
-      try {
-        resJson = JSON.parse(resText);
-      } catch {
-        resJson = null;
-      }
-
-      if (!res.ok) {
-        throw new Error(resJson?.error || resText || `Error ${res.status}`);
-      }
-
-      setMsg(editId ? 'Data komik berhasil diperbarui!' : 'Komik baru berhasil ditambahkan!');
-      handleCancelEdit();
       fetchMangas();
     } catch (err: any) {
       setMsg(`Error: ${err.message}`);
@@ -237,18 +264,18 @@ export default function AdminDashboardPage() {
 
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wider">
-                Slug URL {editId && <span className="text-[10px] text-yellow-400 font-normal">(Terkunci saat edit)</span>}
+                Slug URL {editId && <span className="text-[10px] text-yellow-400 font-normal">(Tidak dapat diubah)</span>}
               </label>
               <input
                 type="text"
                 placeholder="contoh: solo-leveling"
                 value={slug}
-                readOnly={!!editId}
+                disabled={!!editId}
                 onChange={(e) => setSlug(e.target.value)}
                 required
                 className={`w-full border border-[#baa9a9]/30 rounded-lg p-2.5 focus:outline-none ${
                   editId 
-                    ? 'bg-[#221c1c] text-gray-400 cursor-not-allowed' 
+                    ? 'bg-[#1f1a1a] text-gray-400 cursor-not-allowed border-dashed' 
                     : 'bg-[#2a2323] text-white focus:border-[#baa9a9]'
                 }`}
               />
