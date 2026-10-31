@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Yanama Komik',
   description: 'Situs Baca Manhwa & Manga Favoritmu',
   verification: {
-    google: '<meta name="google-site-verification" content="2sh6TfX8aeQyi_A7jjgGp8no0PnyNS5OL5gwhD9I9v0" />'
+    google: '2sh6TfX8aeQyi_A7jjgGp8no0PnyNS5OL5gwhD9I9v0'
   },
 };
 
